@@ -1,22 +1,33 @@
 #pragma once
+#include <unordered_set>
 #include <vector>
 #include "torch/csrc/jit/interned_strings.h"
 
-namespace torch { namespace jit {
-struct AliasInfo {
+namespace torch {
+namespace jit {
+
+class AliasInfo {
+ public:
   // Symbol for the set that can alias
   static Symbol wildcard() {
-     static const Symbol wc = Symbol::fromQualString("alias::*");
-     return wc;
+    static const Symbol wc = Symbol::fromQualString("alias::*");
+    return wc;
   }
-  AliasInfo(std::vector<Symbol> sets = {},
-            std::vector<AliasInfo> contained_types = {})
-  : sets_(std::move(sets))
-  , contained_types_(std::move(contained_types)) {}
 
+  AliasInfo() {}
 
-  // all sets it can be in
-  const std::vector<Symbol>& sets() {
+  void setIsWrite(bool isWrite) {
+    isWrite_ = isWrite;
+  }
+  bool isWrite() const {
+    return isWrite_;
+  }
+
+  void addSet(Symbol aliasSet) {
+    sets_.insert(aliasSet);
+  }
+  // At the beginning of this op, which alias sets does this value belong to?
+  const std::unordered_set<Symbol>& sets() const {
     return sets_;
   }
   // the alias info for the contained types of the type
@@ -24,13 +35,18 @@ struct AliasInfo {
   // the alias sets that the list may be in
   // while containedTypes()[0] refers to the sets that members of the list
   // may be in
-  const std::vector<AliasInfo>& containedTypes() {
-    return contained_types_;
+  void addContainedType(AliasInfo aliasInfo) {
+    containedTypes_.push_back(std::move(aliasInfo));
+  }
+  const std::vector<AliasInfo>& containedTypes() const {
+    return containedTypes_;
   }
 
-private:
-  std::vector<Symbol> sets_;
-  std::vector<AliasInfo> contained_types_;
+ private:
+  std::unordered_set<Symbol> sets_;
+  std::vector<AliasInfo> containedTypes_;
+  bool isWrite_ = false;
 };
 
-}}
+} // namespace jit
+} // namespace torch

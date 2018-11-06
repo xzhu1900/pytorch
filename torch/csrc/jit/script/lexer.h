@@ -93,8 +93,7 @@ namespace script {
   _(TK_DOTS, "dots", "...")                      \
   _(TK_PASS, "pass", "pass")
 
-
-static const char* valid_single_char_tokens = "+-*/%@()[]:,={}><.?!";
+static const char* valid_single_char_tokens = "+-*/%@()[]:,={}><.?!|";
 
 enum TokenKind {
   // we use characters to represent themselves so skip all valid characters
