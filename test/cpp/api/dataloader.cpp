@@ -51,8 +51,8 @@ struct DummyChunkDataset : datasets::ChunkDataSet<DummyChunkDataset, std::vector
     std::iota(batchData.begin(), batchData.end(), chunkSize[chunk_index]);
     return batchData;
   }
-  size_t size() const override {
-    return chunkSize[0] + chunkSize[1];
+  torch::optional<size_t> size() const override {
+    return {};
   }
   size_t get_chunk_count() override{
     return 2;
@@ -74,7 +74,7 @@ TEST(DataTest, ChunkDataSetGetChunk) {
 }
 
 TEST(DataTest, ChunkDataSetGetBatch) {
-  const size_t prefetch_counts[] = {1, 2};
+  const size_t prefetch_counts[] = {2};
 
   for(auto prefetch_count : prefetch_counts)
   {
@@ -634,6 +634,7 @@ struct TestIndexDataset
 struct TestIndexSampler : public samplers::Sampler<TestIndex> {
   explicit TestIndexSampler(size_t size) : size_(size) {}
   void reset() override {}
+  void set_size(size_t new_size) override {}
   torch::optional<TestIndex> next(size_t batch_size) override {
     if (index_ >= size_) {
       return torch::nullopt;

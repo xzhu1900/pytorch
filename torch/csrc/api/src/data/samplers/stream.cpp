@@ -24,6 +24,11 @@ void StreamSampler::reset() {
   examples_retrieved_so_far_ = 0;
 }
 
+void StreamSampler::set_size(size_t new_size) {
+  epoch_size_ = new_size;
+  examples_retrieved_so_far_ = 0;
+}
+
 optional<BatchSize> StreamSampler::next(size_t batch_size) {
   AT_ASSERT(examples_retrieved_so_far_ <= epoch_size_);
   if (examples_retrieved_so_far_ == epoch_size_) {

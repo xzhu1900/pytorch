@@ -15,6 +15,11 @@ void SequentialSampler::reset() {
   index_ = 0;
 }
 
+void SequentialSampler::set_size(size_t new_size) {
+  size_ = new_size;
+  index_ = 0;
+}
+
 optional<std::vector<size_t>> SequentialSampler::next(size_t batch_size) {
   const auto remaining_indices = size_ - index_;
   if (remaining_indices == 0) {

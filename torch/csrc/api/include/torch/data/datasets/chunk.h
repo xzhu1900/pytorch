@@ -250,7 +250,7 @@ class ChunkDataSet : public BatchDataset<Self, Batch> {
         count += copiableItemCount;
       }
 
-      if (count < batch_size) {
+      if (count < batch_size || example_position_ >= totalExampleInChunk) {
         // move to the next chunk to read.
         current_reading_chunk = (current_reading_chunk + 1) % prefetch_count_;
         example_position_ = 0;

@@ -19,6 +19,11 @@ void RandomSampler::reset() {
   index_ = 0;
 }
 
+void RandomSampler::set_size(size_t new_size) {
+  indices_ = torch::randperm(new_size, indices_.options());
+  index_ = 0;
+}
+
 optional<std::vector<size_t>> RandomSampler::next(size_t batch_size) {
   AT_ASSERT(index_ <= indices_.numel());
   const size_t remaining_indices = indices_.numel() - index_;

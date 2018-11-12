@@ -30,6 +30,8 @@ class RandomSampler : public Sampler<> {
   /// Resets the `RandomSampler` to a new set of indices.
   void reset() override;
 
+  void set_size(size_t new_size) override;
+
   /// Returns the next batch of indices.
   optional<std::vector<size_t>> next(size_t batch_size) override;
 

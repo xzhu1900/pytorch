@@ -40,6 +40,8 @@ class StreamSampler : public Sampler<BatchSize> {
   /// Resets the internal state of the sampler.
   void reset() override;
 
+  void set_size(size_t new_size) override;
+
   /// Returns a `BatchSize` object with the number of elements to fetch in the
   /// next batch. This number is the minimum of the supplied `batch_size` and
   /// the difference between the `epoch_size` and the current index. If the
