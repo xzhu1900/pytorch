@@ -2,16 +2,13 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
-#include <functional>
-
-//#include "c10/util/Optional.h"
-//#include "c10/util/C++17.h"
+#include <cassert>
 #include <optional>
 
 #include <cstddef>
+#include <typeinfo>
 
 using namespace std;
-//using c10::optional;
 
 #define _DEBUG 1
 
@@ -22,113 +19,146 @@ struct Utterance
   std::vector<uint8_t> lattice;
 };
 
+template <typename T>
+T swap_endian(T u)
+{
+  union {
+    T u;
+    unsigned char u8[sizeof(T)];
+  } source, dest;
+
+  source.u = u;
+
+  for (size_t k = 0; k < sizeof(T); k++)
+    dest.u8[k] = source.u8[sizeof(T) - k - 1];
+
+  return dest.u;
+}
+
 class HTKParser
 {
 public:
-  using BYTE = std::uint8_t;
+  using FeatureType = float;
+  using LabelType = int32_t;
+  using LatticeType = uint8_t;
+
   explicit HTKParser(const string &file_directory, const string &file_set_name);
 
-  virtual ~HTKParser(){
-    if(m_chunk_file_stream.is_open()){
+  virtual ~HTKParser()
+  {
+    if (m_chunk_file_stream.is_open())
+    {
       m_chunk_file_stream.close();
     }
-
   };
 
   std::vector<Utterance> parse_chunk(size_t chunk_id);
 
-  void PrintData() const {};
-
 private:
   HTKParser() = delete;
   void parse_file_set(const string &file_set_name);
-  void parse_feature(const std::string &file_name, size_t chunk_size, std::vector<Utterance> &data);
-  void parse_label(const std::string &file_name, const size_t chunk_size, std::vector<Utterance> &data);
-  void parse_lattice(const std::string &file_name, std::vector<Utterance> &data);
 
-  // XXX make it to be static
   template <typename T>
-  T ReadData()
+  void parse_data(const std::string &file_name, const std::string &target_name, const size_t chunk_size, std::vector<Utterance> &data)
   {
-    T result;
-    m_chunk_file_stream.read(reinterpret_cast<char *>(&result), sizeof(result));
-    if (is_little_endian_)
+    assert(!m_chunk_file_stream.is_open());
+    m_chunk_file_stream.open(file_name.data(), ios::in | ios::binary);
+
+    // Read header string
+    ReadString(m_chunk_file_stream, target_name);
+
+    // Read version number
+    std::optional<int32_t> version = ReadDebugData<int32_t>(m_chunk_file_stream);
+
+    int element_count = 0;
+
+    for (int element_count = 0; element_count < chunk_size; ++element_count)
     {
-      return swap_endian<T>(result);
+
+      std::optional<int32_t> id = ReadDebugData<int32_t>(m_chunk_file_stream);
+
+#ifdef _DEBUG
+      if (id && id.value() != element_count)
+      {
+        std::string error_msg = "File " + file_name + "is corrupted. The number " + std::to_string(element_count) + " element is missing";
+        throw std::runtime_error(error_msg);
+      }
+#endif
+      int32_t data_byte_size = ReadData<int32_t>(m_chunk_file_stream);
+
+      if (data_byte_size % sizeof(T) != 0)
+      {
+        std::string error_msg = "data size in byte is not a multiplication of " + std::string(typeid(T).name());
+        throw std::runtime_error(error_msg);
+      }
+
+      int32_t data_size = data_byte_size / sizeof(T);
+      void *data_ptr;
+
+      if (target_name == "Feature")
+      {
+        data[element_count].feature.resize(data_size);
+        data_ptr = reinterpret_cast<void *>(data[element_count].feature.data());
+      }
+      else if (target_name == "Lattice")
+      {
+        data[element_count].lattice.resize(data_size);
+        data_ptr = reinterpret_cast<void *>(data[element_count].lattice.data());
+      }
+      else if (target_name == "Label")
+      {
+        data[element_count].label.resize(data_size);
+        data_ptr = reinterpret_cast<void *>(data[element_count].label.data());
+      }
+      else
+      {
+        std::string error_msg = "unknown field " + target_name;
+        throw std::runtime_error(error_msg);
+      }
+      ReadDataArray(m_chunk_file_stream, reinterpret_cast<T *>(data_ptr), data_byte_size);
     }
-    else
-    {
-      return result;
-    }
+    m_chunk_file_stream.close();
   }
 
   template <typename T>
-  //c10::optional<T> ReadDebugData()
-  std::optional<T> ReadDebugData()
+  static T ReadData(ifstream &reader)
+  {
+    T result;
+    reader.read(reinterpret_cast<char *>(&result), sizeof(result));
+
+    return is_little_endian_ ? swap_endian<T>(result) : result;
+  }
+
+  template <typename T>
+  static std::optional<T> ReadDebugData(ifstream &reader)
   {
 #ifdef _DEBUG
     T result;
-    m_chunk_file_stream.read(reinterpret_cast<char *>(&result), sizeof(result));
-    if (is_little_endian_)
-    {
-      return swap_endian<T>(result);
-    }
-    else
-    {
-      return result;
-    }
+    reader.read(reinterpret_cast<char *>(&result), sizeof(result));
+    return is_little_endian_ ? swap_endian<T>(result) : result;
 #else
-    m_chunk_file_stream.ignore(sizeof(T));
+    reader.ignore(sizeof(T));
     return {};
 #endif
   }
 
   template <typename T>
-  T swap_endian(T u)
-  {
-    union {
-      T u;
-      unsigned char u8[sizeof(T)];
-    } source, dest;
-
-    source.u = u;
-
-    for (size_t k = 0; k < sizeof(T); k++)
-      dest.u8[k] = source.u8[sizeof(T) - k - 1];
-
-    return dest.u;
-  }
-
-  template <typename T>
-  void ReadData(T *value, size_t length)
+  static void ReadDataArray(ifstream &reader, T *value, size_t byte_length)
   {
     size_t value_size = sizeof(T);
-    while (length > 0)
+    while (byte_length > 0)
     {
       T v;
-      m_chunk_file_stream.read(reinterpret_cast<char *>(&v), value_size);
+      reader.read(reinterpret_cast<char *>(&v), value_size);
 
-      if (is_little_endian_)
-      {
-        v = swap_endian<T>(v);
-      }
-      *value = v;
-      //m_chunk_file_stream.read(reinterpret_cast<char *>(value), value_size);
-      //assert(length >= value_size);
-      length -= value_size;
+      *value = is_little_endian_ ? swap_endian<T>(v) : v;
+
+      byte_length -= value_size;
       value++;
     }
   }
 
-  void ReadString(string_view tagName);
-
-  struct SupportedField
-  {
-    const char *field_name;
-    //const std::string field_name;
-    //int a;
-    std::function<void()> parser_function;
-  };
+  static void ReadString(ifstream &reader, string_view tagName);
 
   struct ChunkInfo
   {
@@ -142,17 +172,4 @@ private:
   std::vector<std::string> file_extensions_;
 
   static bool is_little_endian_;
-
-  //SupportedField t = { "feature", &HTKParser::parse_feature};
-
-  // make it static?
-  /*const std::vector<SupportedField> supported_fields_ = {
-    { "feature", &HTKParser::parse_feature},
-    { "label", &HTKParser::parse_label},
-    { "lattice", &HTKParser::parse_lattice}
-  };*/
-  /*const std::vector<SupportedField> supported_fields_ = {
-    { "feature", 1},
-    { "label", 2}
-  };*/
 };
