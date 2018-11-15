@@ -218,6 +218,7 @@ endif()
 if (NOT NO_API)
   list(APPEND TORCH_SRCS
     ${TORCH_SRC_DIR}/csrc/api/src/cuda.cpp
+    ${TORCH_SRC_DIR}/csrc/api/src/data/htk/htk_parser.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/datasets/mnist.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/samplers/random.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/samplers/sequential.cpp
