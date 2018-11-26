@@ -7,10 +7,39 @@
 
 #include <cstddef>
 #include <typeinfo>
+#include <cstring>
 
 using namespace std;
 
-#define _DEBUG 1
+//#define _DEBUG 1
+
+template <typename FunctorType>
+struct DeferCleanupType
+{
+public:
+    explicit DeferCleanupType(FunctorType f) : f_(f) {}
+    ~DeferCleanupType() { if (m_cleanup) { f_(); } }
+    void Reset() { m_cleanup = false; }
+
+private:
+    FunctorType f_;
+    bool m_cleanup = true;
+};
+
+template <typename FunctorType>
+DeferCleanupType<FunctorType> DeferCleanup(FunctorType f) { return DeferCleanupType<FunctorType>(f); }
+
+union {
+    uint16_t s;
+    unsigned char c[2];
+} constexpr static endian_checker{1};
+
+constexpr bool is_little_endian()
+{
+    return endian_checker.c[0] == 1;
+}
+
+static bool is_little_endian_  = is_little_endian();
 
 struct Utterance
 {
@@ -35,6 +64,69 @@ T swap_endian(T u)
   return dest.u;
 }
 
+template <typename T>
+static std::optional<T> ReadDebugData(char* buffer, size_t& start_pos)
+{
+#ifdef _DEBUG
+  T result;
+  memcpy(&result, buffer+start_pos, sizeof(T));
+
+  start_pos += sizeof(T);
+  return is_little_endian_ ? swap_endian<T>(result) : result;
+#else
+  start_pos += sizeof(T);
+  return {};
+#endif
+
+}
+
+static void ReadString(char* buffer, size_t& start_pos, string_view tagName)
+{
+#ifdef _DEBUG
+    auto tag_len= tagName.size();
+
+    int compare_result = std::memcmp(buffer, tagName.data(), tag_len);
+    if(compare_result != 0)
+    {
+        std::string actualData(buffer, tag_len);
+        std::string tag(tagName.data(), tag_len);
+        std::string error_msg = "Tag mismatch. Expected: " + tag + ", actual: " + actualData;
+        throw std::runtime_error(error_msg);
+    }
+    start_pos += tagName.size();
+#else
+    start_pos += tagName.size();
+#endif
+}
+
+template <typename T>
+static T ReadData(char* buffer, size_t& start_pos)
+{
+  T result;
+  memcpy(&result, buffer+start_pos, sizeof(T));
+
+  start_pos += sizeof(T);
+
+  return is_little_endian_ ? swap_endian<T>(result) : result;
+}
+
+template <typename T>
+static void ReadDataArray(char* buffer, size_t& start_pos, T *value, size_t byte_length)
+{
+  size_t value_size = sizeof(T);
+  size_t array_len = byte_length / value_size;
+
+  T data[array_len];
+  memcpy(&data[0], buffer+start_pos, byte_length);
+
+  for(int i=0;i<array_len;++i)
+  {
+    *value = is_little_endian_ ? swap_endian<T>(data[i]) : data[i];
+    value++;
+  }
+  start_pos += byte_length;
+}
+
 class HTKParser
 {
 public:
@@ -44,12 +136,10 @@ public:
 
   explicit HTKParser(const string &file_directory, const string &file_set_name);
 
+  size_t get_chunk_count() { return chunk_info_list_.size(); }
+
   virtual ~HTKParser()
   {
-    if (m_chunk_file_stream.is_open())
-    {
-      m_chunk_file_stream.close();
-    }
   };
 
   std::vector<Utterance> parse_chunk(size_t chunk_id);
@@ -61,104 +151,79 @@ private:
   template <typename T>
   void parse_data(const std::string &file_name, const std::string &target_name, const size_t chunk_size, std::vector<Utterance> &data)
   {
-    assert(!m_chunk_file_stream.is_open());
-    m_chunk_file_stream.open(file_name.data(), ios::in | ios::binary);
+    ifstream m_chunk_file_stream;
+    m_chunk_file_stream.open(file_name.data(), ios::in | ios::binary | std::ios::ate);
 
-    // Read header string
-    ReadString(m_chunk_file_stream, target_name);
-
-    // Read version number
-    std::optional<int32_t> version = ReadDebugData<int32_t>(m_chunk_file_stream);
-
-    int element_count = 0;
-
-    for (int element_count = 0; element_count < chunk_size; ++element_count)
+    auto deferredCleanup = DeferCleanup([&]()
     {
+        m_chunk_file_stream.close();
+    });
 
-      std::optional<int32_t> id = ReadDebugData<int32_t>(m_chunk_file_stream);
+    std::streamsize size = m_chunk_file_stream.tellg();
+    m_chunk_file_stream.seekg(0, std::ios::beg);
 
-#ifdef _DEBUG
-      if (id && id.value() != element_count)
-      {
-        std::string error_msg = "File " + file_name + "is corrupted. The number " + std::to_string(element_count) + " element is missing";
-        throw std::runtime_error(error_msg);
-      }
-#endif
-      int32_t data_byte_size = ReadData<int32_t>(m_chunk_file_stream);
-
-      if (data_byte_size % sizeof(T) != 0)
-      {
-        std::string error_msg = "data size in byte is not a multiplication of " + std::string(typeid(T).name());
-        throw std::runtime_error(error_msg);
-      }
-
-      int32_t data_size = data_byte_size / sizeof(T);
-      void *data_ptr;
-
-      if (target_name == "Feature")
-      {
-        data[element_count].feature.resize(data_size);
-        data_ptr = reinterpret_cast<void *>(data[element_count].feature.data());
-      }
-      else if (target_name == "Lattice")
-      {
-        data[element_count].lattice.resize(data_size);
-        data_ptr = reinterpret_cast<void *>(data[element_count].lattice.data());
-      }
-      else if (target_name == "Label")
-      {
-        data[element_count].label.resize(data_size);
-        data_ptr = reinterpret_cast<void *>(data[element_count].label.data());
-      }
-      else
-      {
-        std::string error_msg = "unknown field " + target_name;
-        throw std::runtime_error(error_msg);
-      }
-      ReadDataArray(m_chunk_file_stream, reinterpret_cast<T *>(data_ptr), data_byte_size);
-    }
-    m_chunk_file_stream.close();
-  }
-
-  template <typename T>
-  static T ReadData(ifstream &reader)
-  {
-    T result;
-    reader.read(reinterpret_cast<char *>(&result), sizeof(result));
-
-    return is_little_endian_ ? swap_endian<T>(result) : result;
-  }
-
-  template <typename T>
-  static std::optional<T> ReadDebugData(ifstream &reader)
-  {
-#ifdef _DEBUG
-    T result;
-    reader.read(reinterpret_cast<char *>(&result), sizeof(result));
-    return is_little_endian_ ? swap_endian<T>(result) : result;
-#else
-    reader.ignore(sizeof(T));
-    return {};
-#endif
-  }
-
-  template <typename T>
-  static void ReadDataArray(ifstream &reader, T *value, size_t byte_length)
-  {
-    size_t value_size = sizeof(T);
-    while (byte_length > 0)
+    std::vector<char> buffer(size);
+    if (m_chunk_file_stream.read(buffer.data(), size))
     {
-      T v;
-      reader.read(reinterpret_cast<char *>(&v), value_size);
+      // Read header string
+      size_t start_pos = 0;
+      size_t end_pos = size;
+      ReadString(buffer.data(), start_pos, target_name);
 
-      *value = is_little_endian_ ? swap_endian<T>(v) : v;
+      // Read version number
+      std::optional<int32_t> version = ReadDebugData<int32_t>(buffer.data(), start_pos);
 
-      byte_length -= value_size;
-      value++;
+      int element_count = 0;
+
+      for (int element_count = 0; element_count < chunk_size; ++element_count)
+      {
+
+        std::optional<int32_t> id = ReadDebugData<int32_t>(buffer.data(), start_pos);
+
+  #ifdef _DEBUG
+        if (id && id.value() != element_count)
+        {
+          std::string error_msg = "File " + file_name + "is corrupted. The number " + std::to_string(element_count) + " element is missing";
+          throw std::runtime_error(error_msg);
+        }
+  #endif
+        uint32_t data_byte_size = ReadData<uint32_t>(buffer.data(), start_pos);
+
+        if (data_byte_size % sizeof(T) != 0)
+        {
+          std::string error_msg = "data size in byte is not a multiplication of " + std::string(typeid(T).name());
+          throw std::runtime_error(error_msg);
+        }
+
+        int32_t data_size = data_byte_size / sizeof(T);
+        void *data_ptr;
+
+        if (target_name == "Feature")
+        {
+          data[element_count].feature.resize(data_size);
+          data_ptr = reinterpret_cast<void *>(data[element_count].feature.data());
+        }
+        else if (target_name == "Lattice")
+        {
+          data[element_count].lattice.resize(data_size);
+          data_ptr = reinterpret_cast<void *>(data[element_count].lattice.data());
+        }
+        else if (target_name == "Label")
+        {
+          data[element_count].label.resize(data_size);
+          data_ptr = reinterpret_cast<void *>(data[element_count].label.data());
+        }
+        else
+        {
+          std::string error_msg = "unknown field " + target_name;
+          throw std::runtime_error(error_msg);
+        }
+        ReadDataArray(buffer.data(), start_pos, reinterpret_cast<T *>(data_ptr), data_byte_size);
+      }
+      assert(start_pos==end_pos);
+      m_chunk_file_stream.close();
     }
   }
-
-  static void ReadString(ifstream &reader, string_view tagName);
 
   struct ChunkInfo
   {
@@ -167,9 +232,6 @@ private:
   };
 
   string file_directory_;
-  ifstream m_chunk_file_stream;
   std::vector<ChunkInfo> chunk_info_list_;
   std::vector<std::string> file_extensions_;
-
-  static bool is_little_endian_;
 };
