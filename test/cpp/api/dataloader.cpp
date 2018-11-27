@@ -23,6 +23,7 @@
 #include <vector>
 
 using namespace torch::data; // NOLINT
+using namespace c10;
 
 const std::chrono::milliseconds kMillisecond(1);
 
@@ -94,6 +95,7 @@ TEST(DataTest, InfiniteStreamDataset) {
   }
   ASSERT_EQ(batch_index, 3);
 }
+
 TEST(DataTest, NoSequencerIsIdentity) {
   using namespace torch::data::detail::sequencers; // NOLINT
   NoSequencer<int> no_sequencer;
@@ -203,6 +205,19 @@ TEST(DataTest, SequentialSamplerResetsWell) {
   ASSERT_FALSE(sampler.next(2).has_value());
 }
 
+TEST(DataTest, SequentialSamplerResetsWithNewSizeWell) {
+  samplers::SequentialSampler sampler(5);
+  ASSERT_EQ(sampler.next(5).value(), std::vector<size_t>({0, 1, 2, 3, 4}));
+  ASSERT_FALSE(sampler.next(2).has_value());
+  sampler.reset(7);
+  ASSERT_EQ(
+      sampler.next(7).value(), std::vector<size_t>({0, 1, 2, 3, 4, 5, 6}));
+  ASSERT_FALSE(sampler.next(2).has_value());
+  sampler.reset(3);
+  ASSERT_EQ(sampler.next(3).value(), std::vector<size_t>({0, 1, 2}));
+  ASSERT_FALSE(sampler.next(2).has_value());
+}
+
 TEST(DataTest, CanSaveAndLoadSequentialSampler) {
   {
     samplers::SequentialSampler a(10);
@@ -268,6 +283,18 @@ TEST(DataTest, RandomSamplerResetsWell) {
   ASSERT_FALSE(sampler.next(2).has_value());
 }
 
+TEST(DataTest, RandomSamplerResetsWithNewSizeWell) {
+  samplers::RandomSampler sampler(5);
+  ASSERT_EQ(sampler.next(5).value().size(), 5);
+  ASSERT_FALSE(sampler.next(2).has_value());
+  sampler.reset(7);
+  ASSERT_EQ(sampler.next(7).value().size(), 7);
+  ASSERT_FALSE(sampler.next(2).has_value());
+  sampler.reset(3);
+  ASSERT_EQ(sampler.next(3).value().size(), 3);
+  ASSERT_FALSE(sampler.next(2).has_value());
+}
+
 TEST(DataTest, SavingAndLoadingRandomSamplerYieldsSameSequence) {
   {
     samplers::RandomSampler a(10);
@@ -313,6 +340,18 @@ TEST(DataTest, StreamSamplerResetsWell) {
   ASSERT_FALSE(sampler.next(2).has_value());
   sampler.reset();
   ASSERT_EQ(sampler.next(5).value().size(), 5);
+  ASSERT_FALSE(sampler.next(2).has_value());
+}
+
+TEST(DataTest, StreamSamplerResetsWithNewSizeWell) {
+  samplers::StreamSampler sampler(/*epoch_size=*/5);
+  ASSERT_EQ(sampler.next(5).value().size(), 5);
+  ASSERT_FALSE(sampler.next(2).has_value());
+  sampler.reset(7);
+  ASSERT_EQ(sampler.next(7).value().size(), 7);
+  ASSERT_FALSE(sampler.next(2).has_value());
+  sampler.reset(3);
+  ASSERT_EQ(sampler.next(3).value().size(), 3);
   ASSERT_FALSE(sampler.next(2).has_value());
 }
 
@@ -409,7 +448,7 @@ TEST(DataTest, TensorLambdaWorksforAnyTargetType) {
   ASSERT_EQ(batch[1].target, "2");
 }
 
-struct UnCopyableDataset : public datasets::Dataset<UnCopyableDataset> {
+struct UnCopyableDataset : datasets::Dataset<UnCopyableDataset> {
   UnCopyableDataset() = default;
 
   UnCopyableDataset(const UnCopyableDataset&) = delete;
@@ -618,7 +657,7 @@ struct TestIndexDataset
 
 struct TestIndexSampler : public samplers::Sampler<TestIndex> {
   explicit TestIndexSampler(size_t size) : size_(size) {}
-  void reset() override {}
+  void reset(torch::optional<size_t> new_size = nullopt) override {}
   torch::optional<TestIndex> next(size_t batch_size) override {
     if (index_ >= size_) {
       return torch::nullopt;
@@ -1052,5 +1091,46 @@ TEST(DataLoaderTest, TestExceptionsArePropagatedFromWorkers) {
                     "Original message: badness"));
     ASSERT_THROW(
         std::rethrow_exception(e.original_exception), std::invalid_argument);
+  }
+}
+
+TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
+  const size_t kBatchSize = 13;
+
+  auto dataset = InfiniteStreamDataset().map(
+      transforms::Lambda<int>([](int x) { return x + 1; }));
+
+  auto data_loader = torch::data::make_chunk_data_loader(
+      std::move(dataset),
+      DataLoaderOptions().batch_size(kBatchSize).chunk_loading(true));
+
+  auto iterator = data_loader->begin();
+  for (size_t i = 0; i < 3; ++i, ++iterator) {
+    ASSERT_NE(iterator, data_loader->end());
+    std::vector<int> batch = *iterator;
+    ASSERT_EQ(batch.size(), kBatchSize);
+    for (size_t j = 0; j < kBatchSize; ++j) {
+      ASSERT_EQ(batch.at(j), 1 + (i * kBatchSize) + j);
+    }
+  }
+}
+
+TEST(DataTest, DataLoaderWithChunkSupportMultiWorkers) {
+  const size_t kBatchSize = 13;
+
+  InfiniteStreamDataset dataset;
+
+  auto data_loader = torch::data::make_chunk_data_loader(
+      std::move(dataset),
+      DataLoaderOptions()
+          .batch_size(kBatchSize)
+          .workers(3)
+          .chunk_loading(true));
+
+  auto iterator = data_loader->begin();
+  for (size_t i = 0; i < 3; ++i, ++iterator) {
+    ASSERT_NE(iterator, data_loader->end());
+    std::vector<int> batch = *iterator;
+    ASSERT_EQ(batch.size(), kBatchSize);
   }
 }

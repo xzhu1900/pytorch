@@ -39,7 +39,7 @@ class StreamSampler : public Sampler<BatchSize> {
   TORCH_API explicit StreamSampler(size_t epoch_size);
 
   /// Resets the internal state of the sampler.
-  TORCH_API void reset() override;
+  void reset(optional<size_t> new_size = nullopt) override;
 
   /// Returns a `BatchSize` object with the number of elements to fetch in the
   /// next batch. This number is the minimum of the supplied `batch_size` and
@@ -56,6 +56,20 @@ class StreamSampler : public Sampler<BatchSize> {
  private:
   size_t examples_retrieved_so_far_ = 0;
   size_t epoch_size_;
+};
+
+/// Simply return batch_size as a single index item with each next call.
+class BatchSizeSampler : public Sampler<BatchSize> {
+ public:
+  void reset(optional<size_t> new_size = nullopt) override {}
+
+  optional<BatchSize> next(size_t batch_size) override {
+    return BatchSize(batch_size);
+  }
+
+  void save(torch::serialize::OutputArchive& archive) const override {}
+
+  void load(torch::serialize::InputArchive& archive) override {}
 };
 
 } // namespace samplers
