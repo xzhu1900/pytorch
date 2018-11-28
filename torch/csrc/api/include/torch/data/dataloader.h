@@ -192,7 +192,7 @@ class DataLoader {
         } else {
           // TODO: if batch has no value
           // stop dataloader
-          // return empty batch 
+          // return empty batch
           // iterator needs to handle this case.
           AT_ASSERT(result->batch.has_value());
           batch = std::move(result->batch);
