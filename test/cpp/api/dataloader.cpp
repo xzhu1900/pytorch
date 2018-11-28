@@ -59,7 +59,7 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
   ASSERT_EQ(batch, expected);
 }
 
-struct DummyChunkDataset : datasets::ChunkDataSet<
+struct DummyChunkDataset : public datasets::ChunkDataSet<
                                DummyChunkDataset,
                                std::vector<int>,
                                size_t,
@@ -161,17 +161,25 @@ TEST(DataTest, ChunkDataSetGetBatch) {
   for (auto prefetch_count : prefetch_counts) {
     DummyChunkDataset d(prefetch_count);
 
-
-    auto data_loader = torch::data::make_chunk_data_loader(std::move(d), torch::data::DataLoaderOptions().workers(1).chunk_loading(true));
+    //DummyChunkDataset&& a = std::move(d);
+    auto data_loader = torch::data::make_chunk_data_loader(d, torch::data::DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
 
     {
       //std::vector<int> batch = d.get_batch(batch_size);
-      size_t batch_count = 0;
+
       //for(auto i = data_loader->begin(); ++i; i != data_loader->end())
       auto i = data_loader->begin();
-      for(auto batch_count = 0; ++batch_count; batch_count <3)
+      for(size_t batch_count = 0; batch_count<3; batch_count++)
       {
-        ASSERT_EQ(expected_result[batch_count], *i);
+        auto actual =*i;
+
+        ASSERT_EQ(expected_result[batch_count].size(), actual.size());
+
+        for (size_t index = 0;index < actual.size();++index)
+        {
+          ASSERT_EQ(expected_result[batch_count][index], actual[index]);
+        }
+        ++i;
 
         //batch_count++;
       }
