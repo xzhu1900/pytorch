@@ -56,6 +56,126 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
   ASSERT_EQ(batch, expected);
 }
 
+struct DummyChunkDataset : datasets::ChunkDataSet<
+                               DummyChunkDataset,
+                               std::vector<int>,
+                               size_t,
+                               samplers::SequentialSampler,
+                               samplers::SequentialSampler> {
+public:
+  using BatchType = std::vector<int>;
+  using BatchRequestType = size_t;
+  using ChunkSamplerType = samplers::SequentialSampler;
+  using ExampleSamplerType = samplers::SequentialSampler;
+
+  DummyChunkDataset(size_t prefetch_count)
+      : datasets::ChunkDataSet<
+            DummyChunkDataset,
+            BatchType,
+            BatchRequestType,
+            ChunkSamplerType,
+            ExampleSamplerType>(prefetch_count){};
+
+  ChunkSamplerType get_chunk_sampler() override {
+    return ChunkSamplerType(0);
+  };
+
+  /// Returns the example sampler for this dataset.
+  ExampleSamplerType get_example_sampler() override {
+    return ExampleSamplerType(0);
+  };
+
+  size_t get_chunk_count() override {
+    return 3;
+  }
+
+  BatchType read_chunk(size_t chunk_index) override
+
+  {
+    BatchType batchData;
+
+    auto s = chunkSize[chunk_index];
+
+    batchData.resize(chunkSize[chunk_index]);
+
+    std::iota(batchData.begin(), batchData.end(), chunkSize[chunk_index]);
+
+    return batchData;
+  }
+
+  torch::optional<size_t> size() const override {
+    return {};
+  }
+  size_t chunkSize[3] = {10, 5, 20};
+};
+
+TEST(DataTest, ChunkDataSetGetChunk) {
+  DummyChunkDataset d(1);
+
+  {
+    std::vector<int> batch = d.read_chunk(0);
+
+    int expectedStart = 10;
+
+    for (auto value : batch)
+    {
+      ASSERT_EQ(value, expectedStart++);
+    }
+  }
+  {
+    std::vector<int> batch = d.read_chunk(2);
+
+    int expectedStart = 20;
+
+    for (auto value : batch)
+    {
+      ASSERT_EQ(value, expectedStart++);
+    }
+  }
+  {
+    std::vector<int> batch = d.read_chunk(1);
+
+    int expectedStart = 5;
+
+    for (auto value : batch)
+    {
+      ASSERT_EQ(value, expectedStart++);
+    }
+  }
+}
+
+TEST(DataTest, ChunkDataSetGetBatch) {
+  const size_t prefetch_counts[] = {2};
+  const size_t batch_size = 7;
+  const std::vector<std::vector<int>> expected_result = {
+    {10, 11, 12, 13, 14, 15, 16},
+    {17, 18, 19, 5, 6, 7, 8},
+    {9, 20, 21, 22, 23, 24, 25},
+    {26, 27, 28, 29, 30, 31, 32},
+    {33, 34, 35, 36, 37, 38, 39}
+  };
+
+  for (auto prefetch_count : prefetch_counts) {
+    DummyChunkDataset d(prefetch_count);
+
+
+    auto data_loader = torch::data::make_chunk_data_loader(std::move(d), torch::data::DataLoaderOptions().workers(1).chunk_loading(true));
+
+    {
+      //std::vector<int> batch = d.get_batch(batch_size);
+      size_t batch_count = 0;
+      //for(auto i = data_loader->begin(); ++i; i != data_loader->end())
+      auto i = data_loader->begin();
+      for(auto batch_count = 0; ++batch_count; batch_count <3)
+      {
+        ASSERT_EQ(expected_result[batch_count], *i);
+
+        //batch_count++;
+      }
+    }
+  }
+}
+
 struct InfiniteStreamDataset
     : datasets::StreamDataset<InfiniteStreamDataset, std::vector<int>> {
   std::vector<int> get_batch(size_t batch_size) override {
