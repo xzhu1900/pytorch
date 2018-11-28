@@ -1121,6 +1121,34 @@ TEST(DataLoaderTest, TestExceptionsArePropagatedFromWorkers) {
         std::rethrow_exception(e.original_exception), std::invalid_argument);
   }
 }
+template <typename ChunkSampler = samplers::RandomSampler, typename ExampleSampler = samplers::RandomSampler>>
+class LargeDataset : public datasets::ChunkDataSet<LargeDataset, std::vector<int>, size_t, ChunkSampler, ExampleSampler> {
+  public:
+   LargeDataset(ChunkSampler chunk_sampler, ExampleSampler exampler_sampler, size_t batch_size): chunk_sampler_(std::move(chunk_sampler)), example_sampler_(std::move(example_sampler)),batch_size_(batch_size){}
+
+  std::vector<int> read_chunk(size_t chunk_index) override{
+        std::vector<int> batch(batch_size_);
+        size_t counter = 0;
+    for (auto& i : batch) {
+      i = counter++;
+    }
+    return batch;
+  }
+
+  torch::optional<size_t> size() const override {
+    return torch::nullopt;
+  }
+    get_chunk_sampler() {};
+
+  /// Returns the example sampler for this dataset.  
+  virtual ExampleSampler get_example_sampler() = 0;
+
+  /// returns the number of chunks available in this dataset.
+  virtual size_t get_chunk_count() = 0;
+private:
+  size_t batch_size_;
+};
+
 
 TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
   const size_t kBatchSize = 13;

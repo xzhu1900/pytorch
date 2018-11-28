@@ -23,7 +23,7 @@ namespace datasets {
 template <
     typename Self,
     typename Batch = std::vector<Example<>>,
-    typename BatchRequest = ArrayRef<size_t>,
+    typename BatchRequest = size_t,
     typename ChunkSampler = samplers::RandomSampler,
     typename ExampleSampler = samplers::RandomSampler>
 class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
