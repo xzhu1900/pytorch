@@ -656,7 +656,7 @@ struct TestIndexDataset
 
 struct TestIndexSampler : public samplers::Sampler<TestIndex> {
   explicit TestIndexSampler(size_t size) : size_(size) {}
-  void reset(torch::optional<size_t> new_size = nullopt) override {}
+  void reset(torch::optional<size_t> new_size = torch::nullopt) override {}
   torch::optional<TestIndex> next(size_t batch_size) override {
     if (index_ >= size_) {
       return torch::nullopt;
@@ -1130,9 +1130,6 @@ class LargeDataset : public datasets::ChunkDataSet<
   using BatchType = std::vector<int>;
   using BatchRequestType = size_t;
 
-  //  typename Batch = std::vector<int>,
-  // typename BatchRequest = size_t,
-
   LargeDataset(size_t num_chunks, size_t batch_size)
       : num_chunks_(num_chunks),
         batch_size_(batch_size),
@@ -1200,15 +1197,14 @@ TEST(DataTest, DataLoaderWithChunkSupportMultiWorkers) {
   datasets::SharedBatchDataset<LargeDataset> shared_dataset =
       datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
 
-  InfiniteStreamDataset dataset;
-
   auto data_loader = torch::data::make_chunk_data_loader(
-      std::move(dataset),
+      shared_dataset,
       DataLoaderOptions()
           .batch_size(kBatchSize)
           .workers(3)
           .chunk_loading(true));
 
+  shared_dataset->reset();
   auto iterator = data_loader->begin();
   for (size_t i = 0; i < 3; ++i, ++iterator) {
     ASSERT_NE(iterator, data_loader->end());
