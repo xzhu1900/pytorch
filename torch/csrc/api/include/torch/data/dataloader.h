@@ -196,7 +196,7 @@ class DataLoader {
         } else {
           // TODO: if batch has no value
           // stop dataloader
-          // return empty batch 
+          // return empty batch
           // iterator needs to handle this case.
           AT_ASSERT(result->batch.has_value());
           batch = std::move(result->batch);
@@ -303,7 +303,7 @@ make_chunk_data_loader(Dataset dataset, DataLoaderOptions options) {
   // To avoid copying chunk dataset for each worker, here we wrap it using the
   // ShareBatchDataset before passing to the dataloader.
   datasets::SharedBatchDataset<Dataset> shared_chunk_dataset =
-      datasets::make_shared_dataset<Dataset>(dataset);
+      datasets::make_shared_dataset<Dataset>(std::move(dataset));
   return torch::make_unique<DataLoader<
       datasets::SharedBatchDataset<Dataset>, samplers::BatchSizeSampler>>(
       std::move(shared_chunk_dataset),
