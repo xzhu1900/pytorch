@@ -51,12 +51,12 @@ class ThreadSafeSampler
 
   ThreadSafeSampler(OriginalSampler sampler) : sampler_(std::move(sampler)) {}
 
-  void reset() override {
+  void reset(optional<size_t> new_size) override {
     std::lock_guard<std::mutex> lock(this->mutex_);
-    sampler_.reset();
+    sampler_.reset(new_size);
   }
 
-  BatchRequestType next(size_t batch_size) override {
+  optional<BatchRequestType> next(size_t batch_size) override {
     std::lock_guard<std::mutex> lock(this->mutex_);
     return sampler_.next(batch_size);
   }
@@ -72,7 +72,7 @@ class ThreadSafeSampler
   }
 
  private:
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
   OriginalSampler sampler_;
 };
 } // namespace samplers
