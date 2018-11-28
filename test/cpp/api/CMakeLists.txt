@@ -3,6 +3,16 @@ set(TORCH_API_TEST_SOURCES
   ${TORCH_ROOT}/test/cpp/common/main.cpp
   ${TORCH_API_TEST_DIR}/any.cpp
   ${TORCH_API_TEST_DIR}/dataloader.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_classification.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_comments.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_dssm.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_empty_values.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_exponent_values.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_generic.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_learning_to_rank.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_part_of_speech_tagging.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_sequence_classification.cpp
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_sample_sequence_to_sequence.cpp
   ${TORCH_API_TEST_DIR}/expanding-array.cpp
   ${TORCH_API_TEST_DIR}/integration.cpp
   ${TORCH_API_TEST_DIR}/jit.cpp
