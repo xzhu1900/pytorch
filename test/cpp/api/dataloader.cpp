@@ -23,7 +23,6 @@
 #include <vector>
 
 using namespace torch::data; // NOLINT
-using namespace c10;
 
 const std::chrono::milliseconds kMillisecond(1);
 
@@ -1121,58 +1120,85 @@ TEST(DataLoaderTest, TestExceptionsArePropagatedFromWorkers) {
         std::rethrow_exception(e.original_exception), std::invalid_argument);
   }
 }
-template <typename ChunkSampler = samplers::RandomSampler, typename ExampleSampler = samplers::RandomSampler>>
-class LargeDataset : public datasets::ChunkDataSet<LargeDataset, std::vector<int>, size_t, ChunkSampler, ExampleSampler> {
-  public:
-   LargeDataset(ChunkSampler chunk_sampler, ExampleSampler exampler_sampler, size_t batch_size): chunk_sampler_(std::move(chunk_sampler)), example_sampler_(std::move(example_sampler)),batch_size_(batch_size){}
 
-  std::vector<int> read_chunk(size_t chunk_index) override{
-        std::vector<int> batch(batch_size_);
-        size_t counter = 0;
+class LargeDataset : public datasets::ChunkDataSet<
+                         LargeDataset,
+                         std::vector<int>,
+                         samplers::RandomSampler,
+                         samplers::RandomSampler> {
+ public:
+  using BatchType = std::vector<int>;
+  using BatchRequestType = size_t;
+
+  //  typename Batch = std::vector<int>,
+  // typename BatchRequest = size_t,
+
+  LargeDataset(size_t num_chunks, size_t batch_size)
+      : num_chunks_(num_chunks),
+        batch_size_(batch_size),
+        chunk_sampler_(std::move(samplers::RandomSampler(num_chunks))),
+        example_sampler_(std::move(samplers::RandomSampler(batch_size))) {}
+
+  std::vector<int> read_chunk(size_t chunk_index) override {
+    std::vector<int> batch(batch_size_);
+    size_t counter = chunk_index * batch_size_;
     for (auto& i : batch) {
       i = counter++;
     }
     return batch;
   }
 
-  torch::optional<size_t> size() const override {
-    return torch::nullopt;
+  samplers::RandomSampler get_chunk_sampler() override {
+    return chunk_sampler_;
   }
-    get_chunk_sampler() {};
 
-  /// Returns the example sampler for this dataset.  
-  virtual ExampleSampler get_example_sampler() = 0;
+  samplers::RandomSampler get_example_sampler() override {
+    return example_sampler_;
+  }
 
-  /// returns the number of chunks available in this dataset.
-  virtual size_t get_chunk_count() = 0;
-private:
+  size_t get_chunk_count() override {
+    return num_chunks_;
+  }
+
+ private:
+  size_t num_chunks_;
   size_t batch_size_;
+  samplers::RandomSampler chunk_sampler_;
+  samplers::RandomSampler example_sampler_;
 };
-
 
 TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
   const size_t kBatchSize = 13;
+  const size_t kNumChunks = 10;
 
-  auto dataset = InfiniteStreamDataset().map(
-      transforms::Lambda<int>([](int x) { return x + 1; }));
+  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
+      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
+
+  auto dataset =
+      shared_dataset->map(transforms::Lambda<int>([](int x) { return x + 1; }));
 
   auto data_loader = torch::data::make_chunk_data_loader(
       std::move(dataset),
       DataLoaderOptions().batch_size(kBatchSize).chunk_loading(true));
 
+  shared_dataset->reset();
   auto iterator = data_loader->begin();
   for (size_t i = 0; i < 3; ++i, ++iterator) {
     ASSERT_NE(iterator, data_loader->end());
     std::vector<int> batch = *iterator;
     ASSERT_EQ(batch.size(), kBatchSize);
     for (size_t j = 0; j < kBatchSize; ++j) {
-      ASSERT_EQ(batch.at(j), 1 + (i * kBatchSize) + j);
+      ASSERT_EQ(batch.at(j), 1 + j);
     }
   }
 }
 
 TEST(DataTest, DataLoaderWithChunkSupportMultiWorkers) {
   const size_t kBatchSize = 13;
+  const size_t kNumChunks = 10;
+
+  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
+      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
 
   InfiniteStreamDataset dataset;
 

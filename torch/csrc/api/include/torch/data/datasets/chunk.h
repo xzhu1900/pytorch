@@ -23,15 +23,14 @@ namespace datasets {
 template <
     typename Self,
     typename Batch = std::vector<Example<>>,
-    typename BatchRequest = size_t,
     typename ChunkSampler = samplers::RandomSampler,
     typename ExampleSampler = samplers::RandomSampler>
-class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
+class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
  public:
 
   using SelfType = Self;
   using BatchType = Batch;
-  using BatchRequestType = BatchRequest;
+  using BatchRequestType = size_t;
   using ChunkSamplerType = ChunkSampler;
   using ExampleSamplerType = ExampleSampler;
 
@@ -56,14 +55,14 @@ class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
   /// chunk loading and creating of Example batches. The implemenation is
   /// dataset agnostic and does not need overriding in different chunk data
   /// sets.
-  Batch get_batch(BatchRequest indices) override {
-    AT_ASSERT(indices.size() == 1);
-    return Batch();
+  Batch get_batch(size_t batch_size) override {
+     // Note: temporary change only for the tests.
+    return read_chunk(0);
   }
 
   /// This will clear any internal state and starts the internal prefetching
   /// mechanism for the chunk dataset. It simply starts a mini dataloader.
-  void reset() override {}
+  virtual void reset() {}
 
   /// size is not used for chunk dataset.
   optional<size_t> size() const override {
