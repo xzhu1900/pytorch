@@ -98,6 +98,7 @@ TEST(DataTest, InfiniteStreamDataset) {
   }
   ASSERT_EQ(batch_index, 3);
 }
+
 TEST(DataTest, NoSequencerIsIdentity) {
   using namespace torch::data::detail::sequencers; // NOLINT
   NoSequencer<int> no_sequencer;
@@ -450,7 +451,7 @@ TEST(DataTest, TensorLambdaWorksforAnyTargetType) {
   ASSERT_EQ(batch[1].target, "2");
 }
 
-struct UnCopyableDataset : public datasets::Dataset<UnCopyableDataset> {
+struct UnCopyableDataset : datasets::Dataset<UnCopyableDataset> {
   UnCopyableDataset() = default;
 
   UnCopyableDataset(const UnCopyableDataset&) = delete;
@@ -1117,5 +1118,103 @@ TEST(DataLoaderTest, TestExceptionsArePropagatedFromWorkers) {
                     "Original message: badness"));
     ASSERT_THROW(
         std::rethrow_exception(e.original_exception), std::invalid_argument);
+  }
+}
+
+
+class LargeDataset : public datasets::ChunkDataSet<
+                         LargeDataset,
+                         std::vector<int>,
+                         samplers::RandomSampler,
+                         samplers::RandomSampler> {
+ public:
+  using BatchType = std::vector<int>;
+  using BatchRequestType = size_t;
+#include <iostream>
+  LargeDataset(size_t num_chunks, size_t batch_size)
+      : num_chunks_(num_chunks),
+        batch_size_(batch_size),
+        chunk_sampler_(std::move(samplers::RandomSampler(num_chunks))),
+        example_sampler_(std::move(samplers::RandomSampler(batch_size))) {}
+
+  std::vector<int> read_chunk(size_t chunk_index) override {
+    std::cout<<"Calling read_chunk on this" <<this<<std::endl;
+    std::vector<int> batch(batch_size_);
+    size_t counter = chunk_index * batch_size_;
+    for (auto& i : batch) {
+      i = counter++;
+    }
+    return batch;
+  }
+
+  samplers::RandomSampler get_chunk_sampler() override {
+    return chunk_sampler_;
+  }
+
+  samplers::RandomSampler get_example_sampler() override {
+    return example_sampler_;
+  }
+
+  size_t get_chunk_count() override {
+    return num_chunks_;
+  }
+
+  void reset() override{
+    std::cout<<"Calling reset on this" <<this<<std::endl;
+      }
+
+ private:
+  size_t num_chunks_;
+  size_t batch_size_;
+  samplers::RandomSampler chunk_sampler_;
+  samplers::RandomSampler example_sampler_;
+};
+
+TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
+  const size_t kBatchSize = 13;
+  const size_t kNumChunks = 10;
+
+  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
+      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
+
+  auto dataset =
+      shared_dataset.map(transforms::Lambda<int>([](int x) { return x + 1; }));
+
+  auto data_loader = torch::data::make_chunk_data_loader(
+      std::move(dataset),
+      DataLoaderOptions().batch_size(kBatchSize).chunk_loading(true));
+
+  shared_dataset->reset();
+  auto iterator = data_loader->begin();
+  for (size_t i = 0; i < 3; ++i, ++iterator) {
+    ASSERT_NE(iterator, data_loader->end());
+    std::vector<int> batch = *iterator;
+    ASSERT_EQ(batch.size(), kBatchSize);
+    for (size_t j = 0; j < kBatchSize; ++j) {
+      ASSERT_EQ(batch.at(j), 1 + j);
+    }
+  }
+}
+
+TEST(DataTest, DataLoaderWithChunkSupportMultiWorkers) {
+  const size_t kBatchSize = 13;
+  const size_t kNumChunks = 10;
+
+  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
+      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
+
+  auto data_loader = torch::data::make_chunk_data_loader(
+      shared_dataset,
+      DataLoaderOptions()
+          .batch_size(kBatchSize)
+          .workers(3)
+          .chunk_loading(true));
+
+  shared_dataset->reset();
+  auto iterator = data_loader->begin();
+  for (size_t i = 0; i < 3; ++i, ++iterator) {
+    ASSERT_NE(iterator, data_loader->end());
+    std::vector<int> batch = *iterator;
+    ASSERT_EQ(batch.size(), kBatchSize);
   }
 }
