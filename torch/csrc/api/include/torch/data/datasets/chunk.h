@@ -162,7 +162,6 @@ class ChunkDataBuffer {
 template <
     typename Self,
     typename Batch = std::vector<Example<>>,
-    typename BatchRequest = size_t,
     typename ChunkSampler = samplers::RandomSampler,
     typename ExampleSampler = samplers::RandomSampler>
 class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
@@ -170,7 +169,6 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
 
   using SelfType = Self;
   using BatchType = Batch;
-  using BatchRequestType = size_t;
   using ChunkSamplerType = ChunkSampler;
   using ExampleSamplerType = ExampleSampler;
 
@@ -191,11 +189,12 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
   /// ChunkDataSet.
   ChunkDataSet(const ChunkDataSet& data_set)
   {
-    chunks_to_load_ = data_set.chunks_to_load_;
     preloader_count_ = data_set.preloader_count_;
-    chunk_sampler_ = torch::make_unique<samplers::ThreadSafeSampler<ChunkSamplerType>>(
-            ChunkSamplerType(chunks_to_load_));
-    chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(chunks_to_load_);
+    chunks_to_load_ = 3;
+    chunk_sampler_ =
+        torch::make_unique<samplers::ThreadSafeSampler<ChunkSamplerType>>(
+            chunks_to_load_);
+    lazy_initialize();
   }
 
   virtual ~ChunkDataSet() {
@@ -221,28 +220,20 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
   /// chunk loading and creating of Example batches. The implemenation is
   /// dataset agnostic and does not need overriding in different chunk data
   /// sets.
-  Batch get_batch(BatchRequest indices) override {
+  Batch get_batch(size_t batch_size) override {
     if (chunk_buffer_ == nullptr) {
       throw std::runtime_error(
           "Dataset has not been reset() before calling get_batch().");
     }
-    return chunk_buffer_->get_batch(indices);
+    return chunk_buffer_->get_batch(batch_size);
   }
 
   /// This will clear any internal state and starts the internal prefetching
   /// mechanism for the chunk dataset. It simply starts a mini dataloader.
-  void reset() override {
+  virtual void reset() {
     chunks_to_load_ = get_chunk_count();
-    chunk_sampler_->reset(chunks_to_load_);
 
-    // Creates a new chunk buffer each time we reset the dataset.
-    chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
-        chunks_to_load_);
-
-    for (size_t i = 0; i < preloader_count_; ++i) {
-      preload_threads_.emplace_back(
-          [this, i]() mutable { this->preloader(i); });
-    }
+    lazy_initialize();
   }
 
   /// size is not used for chunk dataset.
@@ -273,6 +264,19 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
       } catch (...) {
         chunk_buffer_->add_chunk_data(chunk_id, std::current_exception());
       }
+    }
+  }
+
+  void lazy_initialize() {
+    chunk_sampler_->reset(chunks_to_load_);
+
+    // Creates a new chunk buffer each time we reset the dataset.
+    chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
+        chunks_to_load_);
+
+    for (size_t i = 0; i < preloader_count_; ++i) {
+      preload_threads_.emplace_back(
+          [this, i]() mutable { this->preloader(i); });
     }
   }
  private:

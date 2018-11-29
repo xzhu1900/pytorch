@@ -59,6 +59,89 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
   ASSERT_EQ(batch, expected);
 }
 
+struct DummyChunkDataset : public datasets::ChunkDataSet<
+                               DummyChunkDataset,
+                               std::vector<int>,
+                               samplers::SequentialSampler,
+                               samplers::SequentialSampler> {
+public:
+  using BatchType = std::vector<int>;
+  using ChunkSamplerType = samplers::SequentialSampler;
+  using ExampleSamplerType = samplers::SequentialSampler;
+
+  DummyChunkDataset(size_t prefetch_count)
+      : datasets::ChunkDataSet<
+            DummyChunkDataset,
+            BatchType,
+            ChunkSamplerType,
+            ExampleSamplerType>(prefetch_count){};
+
+  /// dummy getter
+  ChunkSamplerType get_chunk_sampler() override {
+    return ChunkSamplerType(0);
+  };
+
+  /// dummy getter
+  ExampleSamplerType get_example_sampler() override {
+    return ExampleSamplerType(0);
+  };
+
+  size_t get_chunk_count() override {
+    return chunk_size_;
+  }
+
+  BatchType read_chunk(size_t chunk_index) override {
+    BatchType batchData;
+    int start_index = chunk_index == 0
+        ? 0
+        : std::accumulate(chunkSize, chunkSize + chunk_index - 1, 0);
+
+        batchData.resize(chunkSize[chunk_index]);
+
+    std::iota(batchData.begin(), batchData.end(), start_index);
+
+    return batchData;
+  }
+
+  const static size_t chunk_size_ = 3;
+  size_t chunkSize[chunk_size_] = {10, 5, 20};
+};
+
+TEST(DataTest, ChunkDataSetGetBatch) {
+  const size_t prefetch_counts[] = {1, 2, 3, 4};
+  const size_t batch_sizes[] = {5, 7};
+
+  for (auto prefetch_count : prefetch_counts) {
+    for(auto batch_size : batch_sizes){
+
+      datasets::SharedBatchDataset<DummyChunkDataset> dataset =
+      datasets::make_shared_dataset<DummyChunkDataset>(prefetch_count);
+
+      dataset->reset();
+
+      auto data_loader = torch::data::make_chunk_data_loader(
+          std::move(*dataset),
+          DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
+
+      std::vector<bool> result(35, false);
+
+      auto iterator = data_loader->begin();
+      for (size_t i = 0; iterator!=data_loader->end(); ++i, ++iterator) {
+        std::vector<int> batch = *iterator;
+        ASSERT_EQ(batch.size(), batch_size);
+        for (size_t j = 0; j < batch_size; ++j) {
+          result[j] = true;
+        }
+      }
+
+      for(auto data : result)
+      {
+        ASSERT_EQ(data, true);
+      }
+    }
+  }
+}
+
 struct InfiniteStreamDataset
     : datasets::StreamDataset<InfiniteStreamDataset, std::vector<int>> {
   std::vector<int> get_batch(size_t batch_size) override {
@@ -1131,7 +1214,12 @@ class LargeDataset : public datasets::ChunkDataSet<
   using BatchType = std::vector<int>;
   using BatchRequestType = size_t;
   LargeDataset(size_t num_chunks, size_t batch_size)
-      : num_chunks_(num_chunks),
+      : datasets::ChunkDataSet<
+                         LargeDataset,
+                         std::vector<int>,
+                         samplers::RandomSampler,
+                         samplers::RandomSampler> (1),
+        num_chunks_(num_chunks),
         batch_size_(batch_size),
         chunk_sampler_(std::move(samplers::RandomSampler(num_chunks))),
         example_sampler_(std::move(samplers::RandomSampler(batch_size))) {}
