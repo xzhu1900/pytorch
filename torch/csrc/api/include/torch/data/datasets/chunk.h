@@ -12,130 +12,140 @@ namespace torch {
 namespace data {
 namespace datasets {
 
-template <typename Chunk = std::vector<Example<>>, typename ExampleSampler = samplers::RandomSampler>
+/// A class that contains a chunk unit. A chunk unit can be a collection of
+/// images, utterances, e.t.c. This class is agnostic of how the chunk is
+/// composed and what's the chunk boundary. It is an templated class which
+/// holds data from a specific chunk with associated sampler for example drawing.
+template <
+    typename Chunk = std::vector<Example<>>,
+    typename ExampleSampler = samplers::RandomSampler>
 struct ChunkData {
-  public:
+ public:
   using ChunkType = Chunk;
-    // XXX remember rename variable name
-    ChunkData(size_t chk_idx, size_t chk_size, ChunkType data)
-        : chunk_index(chk_idx),
-        remaining_example_count(chk_size)
-        {
-        //sampler = std::make_shared<samplers::ThreadSafeSampler<ChunkSamplerType>>(sampler);
-        chunk_data = std::move(data);
 
-        //std::unique_ptr<ExampleSampler> sampler = torch::make_unique<ExampleSampler>(data.size()); // in the real dataset, we need to get a copy of the
+  ChunkData(size_t chunk_index, size_t chunk_size, ChunkType data)
+      : chunk_index_(chunk_index), remaining_example_count(chunk_size), chunk_data(std::move(data)) {
+    sampler = torch::make_unique<ExampleSampler>(chunk_data.size());
+  }
+  ChunkData(size_t chunk_index, std::exception_ptr e)
+      : chunk_index_(chunk_index), exception(e) {}
 
-        sampler = torch::make_unique<ExampleSampler>(chunk_data.size());
+  /// the chunk index. We will need this for ordered sequence.
+  size_t chunk_index_;
 
-    }
-    ChunkData(size_t chk_idx, std::exception_ptr exception)
-        : chunk_index(chk_idx), exception_(exception){
-    }
-    size_t chunk_index;
-    size_t remaining_example_count;
-    std::unique_ptr<ExampleSampler> sampler;
-    ChunkType chunk_data;
-    std::exception_ptr exception_;
+  /// remaining examples in this chunk.
+  size_t remaining_example_count;
+
+  /// in-chunk shuffle sampler
+  std::unique_ptr<ExampleSampler> sampler;
+
+  /// chunk data to return
+  ChunkType chunk_data;
+
+  /// exception pointer which captures any abnormal exceptions while loading the
+  /// chunk.
+  std::exception_ptr exception;
 };
 
-/// Main class that handles the chunk data.
+/// ChunkDataBuffer manages a queue of ChunkData. It fetches batch data for
+/// ChunkDataSet, tracks when new ChunkData is needed, and when all chunk are
+/// loaded.
 template <typename Batch = std::vector<Example<>>, typename ExampleSampler = samplers::RandomSampler>
 class ChunkDataBuffer {
-public:
+ public:
+  using BatchType = Batch;
+  using BatchRequestType = typename ExampleSampler::BatchRequestType;
+  ChunkDataBuffer(size_t num_chunks) : remaining_chunk_count_(num_chunks) {}
 
-    using BatchType = Batch;
-    using BatchRequestType = typename ExampleSampler::BatchRequestType;
-    ChunkDataBuffer(size_t num_chunks)
-        : remaining_chunk_count_(num_chunks) {}
+  /// Return batch data from the queue. Called from the ChunkDataSet main thread.
+  BatchType get_batch(size_t batch_size) {
+    BatchType result;
+    size_t count = 0;
 
-    /// Multi-reader multi writer buffer.
-    BatchType get_batch(size_t batch_size) {
-        BatchType res;
-        size_t count = 0;
+    while (count < batch_size) {
+      std::unique_lock<std::mutex> lock(mutex_);
+      cvr_.wait(lock, [this] {
+        // wait till there is available data in the queue or if all chunks are loaded (i.e. the data set is exhausted for this epoch)
+        return (
+            this->total_example_count_in_queue_ > 0 ||
+            remaining_chunk_count_ == 0);
+      });
 
-        while (count < batch_size) {
-            std::unique_lock<std::mutex> lock(mutex_);
-            cvr_.wait(lock, [this] { // readers wait till these two conditions.
-                return (
-                    this->total_example_count_in_queue_ > 0 ||
-                    remaining_chunk_count_ == 0);
-            });
-            if (remaining_chunk_count_ == 0) {
-                lock.unlock();
-                // cvw_.notify_all();
-                return res; // unless a reset is done, data read is already completed.
-            }
-            while (count < batch_size && chunk_queue_.size() > 0) {
-                size_t local_count = 0;
-                auto& chk_data = chunk_queue_.front();
-                if (chk_data.remaining_example_count > 0) {
-                  auto example_count = std::min(batch_size - count, chk_data.remaining_example_count);
-                  auto batch_example_indices =
-                      chk_data.sampler->next(example_count);
-                  AT_ASSERT(
-                      batch_example_indices &&
-                      batch_example_indices.value().size() ==
-                          example_count)
-                  BatchRequestType indices = batch_example_indices.value();
-                  for (size_t i : indices) {
-                    res.emplace_back(chk_data.chunk_data[i]);
-                    count++;
-                    local_count++;
-                  }
-                  chk_data.remaining_example_count -= local_count;
-                  total_example_count_in_queue_ -= local_count;
-                }
-                assert(chk_data.remaining_example_count >= 0);
-                if (chk_data.remaining_example_count == 0) {
-                    chunk_queue_.pop();
-                    remaining_chunk_count_--;
-                }
-            }
-            lock.unlock();
-            cvw_.notify_all(); // notify all writers.
+      if (remaining_chunk_count_ == 0) {
+        lock.unlock();
+
+        // All chunks are loaded. Return the remaining data if there is any as the last batch, and wait for a reset() to restart.
+        return result;
+      }
+
+      while (count < batch_size && chunk_queue_.size() > 0) {
+        size_t local_count = 0;
+        auto& chunk_data = chunk_queue_.front();
+
+        if (chunk_data.remaining_example_count > 0) {
+          auto example_count =
+              std::min(batch_size - count, chunk_data.remaining_example_count);
+          auto batch_example_indices = chunk_data.sampler->next(example_count);
+          AT_ASSERT(
+              batch_example_indices &&
+              batch_example_indices.value().size() == example_count)
+          BatchRequestType indices = batch_example_indices.value();
+          for (size_t i : indices) {
+            result.emplace_back(chunk_data.chunk_data[i]);
+            count++;
+            local_count++;
+          }
+          chunk_data.remaining_example_count -= local_count;
+          total_example_count_in_queue_ -= local_count;
         }
-        return res;
+        assert(chunk_data.remaining_example_count >= 0);
+        if (chunk_data.remaining_example_count == 0) {
+          chunk_queue_.pop();
+          remaining_chunk_count_--;
+        }
+      }
+      lock.unlock();
+      cvw_.notify_all(); // notify all writers.
     }
+    return result;
+  }
 
-    /// Preload threads call this method to add data.
-    void add_chunk_data(size_t index, BatchType data) {
-        std::unique_lock<std::mutex> lock(mutex_);
-        cvw_.wait(lock, [this] { // writers wait for this condition.
-            return this->total_example_count_in_queue_ < queue_depth_s;
-        });
+  /// Push preloaded chunks to chunk queue. Called from the ChunkDataSet worker threads.
+  void add_chunk_data(size_t index, BatchType data) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cvw_.wait(lock, [this] {
+      // stop loading if we have preloaded enough data.
+      return this->total_example_count_in_queue_ < queue_depth_s;
+    });
 
-                         // sampler
+    ChunkData<BatchType, ExampleSampler> chunk_data(index, data.size(), data);
+    chunk_queue_.push(std::move(chunk_data));
+    total_example_count_in_queue_ += data.size();
+    lock.unlock();
+    cvr_.notify_all();
+  }
 
-        ChunkData<BatchType, ExampleSampler> chk_data(index, data.size(), data);
-        chunk_queue_.push(std::move(chk_data));
-        total_example_count_in_queue_ += data.size();
-        lock.unlock();
-        cvr_.notify_all(); // notify all readers.
-    }
+  /// Push exceptions throwed during preloading into chunk queue. Called from the ChunkDataSet worker threads.
+  void add_chunk_data(size_t index, std::exception_ptr e_ptr) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cvw_.wait(lock, [this] {
+      // stop loading if we have preloaded enough data.
+      return this->total_example_count_in_queue_ < queue_depth_s;
+    });
+    ChunkData<BatchType, ExampleSampler> chunk_data(index, e_ptr);
+    chunk_queue_.push(std::move(chunk_data));
+    lock.unlock();
+    cvr_.notify_all(); // notify all readers.
+  }
 
-    /// Preload threads call this method to add data.
-    void add_chunk_data(size_t index, std::exception_ptr e_ptr) {
-        std::unique_lock<std::mutex> lock(mutex_);
-        cvw_.wait(lock, [this] { // writers wait for this condition.
-            return this->total_example_count_in_queue_ < queue_depth_s;
-        });
-        ChunkData<BatchType, ExampleSampler> chk_data(index, e_ptr);
-        chunk_queue_.push(std::move(chk_data));
-        lock.unlock();
-        cvr_.notify_all(); // notify all readers.
-    }
-
-    size_t total_example_count_in_queue_{};
-    size_t remaining_chunk_count_;
-    std::queue<ChunkData<BatchType, ExampleSampler>> chunk_queue_;
-    std::mutex mutex_;
-    std::condition_variable cvr_;
-    std::condition_variable cvw_;
-
-    static const size_t queue_depth_s = 500;
+  size_t total_example_count_in_queue_ = 0;
+  size_t remaining_chunk_count_ = 0;
+  std::queue<ChunkData<BatchType, ExampleSampler>> chunk_queue_;
+  std::mutex mutex_;
+  std::condition_variable cvr_;
+  std::condition_variable cvw_;
+  static const size_t queue_depth_s = 500;
 };
-
 
 /// A stateful dataset that support hierarchical sampling and prefetching of
 /// entre chunks. dataset that supports loading an entire chunk of data.
@@ -169,30 +179,26 @@ class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
       throw std::runtime_error(
           "preloader_count is 0. At least one preloader needs to be specified.");
     }
-    auto sampler = ChunkSamplerType(0);
-
-    chunk_sampler_ = std::make_shared<samplers::ThreadSafeSampler<ChunkSamplerType>>(sampler);
-    //mutex_ = std::make_shared<std::mutex>();
-    //preload_threads_ = std::make_shared<std::vector<std::thread>>();
+    chunk_sampler_ =
+        torch::make_unique<samplers::ThreadSafeSampler<ChunkSamplerType>>(
+            ChunkSamplerType(0));
   }
 
+  /// Customize copy constructor. We don't expect user to copy ChunkDataSet
+  /// which inner state. This is error-prone if user changes some internal state
+  /// while DataLoader is using it. Instead, we create a new ChunkDataSet from a
+  /// clean slate, and DataLoader uses shared pointer to reference this
+  /// ChunkDataSet.
   ChunkDataSet(const ChunkDataSet& data_set)
   {
-    chunk_sampler_ = data_set.chunk_sampler_;
-    chunk_buffer_ = data_set.chunk_buffer_;
-    // for (const std::thread& worker_thread : data_set.preload_threads_) {
-    //   preload_threads_.emplace_back(worker_thread);
-    // }
-
-    //preload_threads_ = std::move(data_set.preload_threads_);
-    //mutex_ = std::move(data_set.mutex_);
     chunks_to_load_ = data_set.chunks_to_load_;
     preloader_count_ = data_set.preloader_count_;
+    chunk_sampler_ = torch::make_unique<samplers::ThreadSafeSampler<ChunkSamplerType>>(
+            ChunkSamplerType(chunks_to_load_));
+    chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(chunks_to_load_);
   }
 
   virtual ~ChunkDataSet() {
-    std::cout << "calling destrctor";
-
     for (auto& worker_thread : preload_threads_) {
       worker_thread.join();
     }
@@ -216,7 +222,6 @@ class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
   /// dataset agnostic and does not need overriding in different chunk data
   /// sets.
   Batch get_batch(BatchRequest indices) override {
-//    AT_ASSERT(indices.size() == 1);
     if (chunk_buffer_ == nullptr) {
       throw std::runtime_error(
           "Dataset has not been reset() before calling get_batch().");
@@ -229,9 +234,10 @@ class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
   void reset() override {
     chunks_to_load_ = get_chunk_count();
     chunk_sampler_->reset(chunks_to_load_);
-    chunk_buffer_ = std::make_shared<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
-        chunks_to_load_); // Creates a new chunk buffer each time we reset the
-                          // dataset.
+
+    // Creates a new chunk buffer each time we reset the dataset.
+    chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
+        chunks_to_load_);
 
     for (size_t i = 0; i < preloader_count_; ++i) {
       preload_threads_.emplace_back(
@@ -245,24 +251,22 @@ class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
   }
 
  private:
+
+  /// running on worker thread to preload chunk data.
   void preloader(size_t id) {
     while (true) {
-      size_t chunk_id = -1;
+      size_t chunk_id;
       try {
-        {
-          // std::lock_guard<std::mutex> lock(
-          //     *mutex_); // This is simply the mutex for generating chunk
-          //              // index. We can wrap the chunk sampler using the
-          //              // thread-safe sampler to achieve the same
-          //              // effect.
-          if (chunks_to_load_ > 0) {
-            auto chunk_sampler_result = chunk_sampler_->next(1);
-            AT_ASSERT(chunk_sampler_result && chunk_sampler_result.value().size() == 1); // assert the sampler is not exhausted
-            chunk_id = chunk_sampler_result.value()[0];
-            chunks_to_load_--;
-          } else {
-            break;
-          }
+        if (chunks_to_load_ > 0) {
+          auto chunk_sampler_result = chunk_sampler_->next(1);
+          AT_ASSERT(
+              chunk_sampler_result &&
+              chunk_sampler_result.value().size() ==
+                  1); // assert the sampler is not exhausted
+          chunk_id = chunk_sampler_result.value()[0];
+          chunks_to_load_--;
+        } else {
+          break;
         }
         chunk_buffer_->add_chunk_data(chunk_id, this->read_chunk(chunk_id));
 
@@ -270,29 +274,22 @@ class ChunkDataSet : public BatchDataset<Self, Batch, BatchRequest> {
         chunk_buffer_->add_chunk_data(chunk_id, std::current_exception());
       }
     }
-    std::cout << "preloader stopping :" << id << std::endl;
   }
-
-  /*void free_thread()
-  {
-
-      for (auto& worker_thread : *preload_threads_) {
-      worker_thread.join();
-    }
-  }*/
-
  private:
-  std::shared_ptr<samplers::ThreadSafeSampler<ChunkSampler>> chunk_sampler_;
-  std::shared_ptr<ChunkDataBuffer<BatchType, ExampleSampler>> chunk_buffer_;
+ // chunk index sampler.
+  std::unique_ptr<samplers::ThreadSafeSampler<ChunkSampler>> chunk_sampler_;
 
-  // wrap with shared pointer to make it moveble and copyable
-  //std::shared_ptr<std::vector<std::thread>> preload_threads_;
+  // chunk data buffer which holds chunk data from preloading thread.
+  std::unique_ptr<ChunkDataBuffer<BatchType, ExampleSampler>> chunk_buffer_;
+
+  // worker thread pool
   std::vector<std::thread> preload_threads_;
-  // wrap the mutex with a unique ptr to make chunkDataSet movable.
-  //std::shared_ptr<std::mutex> mutex_;
-  size_t chunks_to_load_{};
 
-  size_t preloader_count_;
+  // total number of chunks to load
+  size_t chunks_to_load_ = 0;
+
+  // worker thread count
+  size_t preloader_count_ = 0;
 };
 } // namespace datasets
 } // namespace data
