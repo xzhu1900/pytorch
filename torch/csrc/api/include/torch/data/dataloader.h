@@ -154,13 +154,9 @@ class DataLoader {
   /// new jobs.
   void reset(bool prefetch = true) {
     shuttle_.drain();
-    sampler_.reset(nullopt);
+    sampler_.reset();
     sequence_number_ = 0;
     sequencer_ = new_sequencer();
-    if (options_.chunk_loading) {
-      AT_ASSERT(main_thread_dataset_ != nullptr);
-      main_thread_dataset_->reset();
-    }
     if (prefetch) {
       this->prefetch();
     }
@@ -303,7 +299,7 @@ make_chunk_data_loader(Dataset dataset, DataLoaderOptions options) {
   // To avoid copying chunk dataset for each worker, here we wrap it using the
   // ShareBatchDataset before passing to the dataloader.
   datasets::SharedBatchDataset<Dataset> shared_chunk_dataset =
-      datasets::make_shared_dataset<Dataset>(dataset);
+      datasets::make_shared_dataset<Dataset>(std::move(dataset));
   return torch::make_unique<DataLoader<
       datasets::SharedBatchDataset<Dataset>, samplers::BatchSizeSampler>>(
       std::move(shared_chunk_dataset),
@@ -314,8 +310,8 @@ make_chunk_data_loader(Dataset dataset, DataLoaderOptions options) {
 /// Creates a new `DataLoader`, inferring the necessary template types from
 /// the given arguments.
 template <
-    typename Dataset,
     typename Sampler = samplers::RandomSampler,
+    typename Dataset,
     typename =
         torch::enable_if_t<std::is_constructible<Sampler, size_t>::value>>
 std::unique_ptr<DataLoader<Dataset, Sampler>> make_data_loader(
