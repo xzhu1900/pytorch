@@ -23,17 +23,20 @@
 #include <vector>
 
 using namespace torch::data; // NOLINT
-using namespace c10;
 
 const std::chrono::milliseconds kMillisecond(1);
 
 struct DummyDataset : datasets::Dataset<DummyDataset, int> {
+  explicit DummyDataset(size_t size = 100) : size_(size) {}
+
   int get(size_t index) override {
     return 1 + index;
   }
   torch::optional<size_t> size() const override {
-    return 100;
+    return size_;
   }
+
+  size_t size_;
 };
 
 TEST(DataTest, DatasetCallsGetCorrectly) {
@@ -581,8 +584,7 @@ TEST(DataTest, DataShuttlePopResultTimesOut) {
 }
 
 struct UncopyableDataset : datasets::Dataset<UncopyableDataset, int> {
-  UncopyableDataset(const std::string& /* unused */)
-      : mutex(torch::make_unique<std::mutex>()) {}
+  UncopyableDataset(const std::string& /* unused */) {}
 
   UncopyableDataset(UncopyableDataset&&) = default;
   UncopyableDataset& operator=(UncopyableDataset&&) = default;
@@ -591,32 +593,29 @@ struct UncopyableDataset : datasets::Dataset<UncopyableDataset, int> {
   UncopyableDataset& operator=(const UncopyableDataset&) = delete;
 
   int get(size_t index) override {
-    {
-      std::lock_guard<std::mutex> guard(*mutex);
-      thread_ids.insert(std::this_thread::get_id());
-    }
     return 1 + index;
   }
   torch::optional<size_t> size() const override {
     return 100;
   }
-
-  std::unique_ptr<std::mutex> mutex;
-  std::unordered_set<std::thread::id> thread_ids;
 };
 
 TEST(DataTest, SharedBatchDatasetReallyIsShared) {
+  // This test will only compile if we really are not making any copies.
+  // There is otherwise no logic to test and because it is not deterministic
+  // how many and when worker threads access the shareddataset, we don't have
+  // any additional assertions here.
+
   auto shared_dataset =
       torch::data::datasets::make_shared_dataset<UncopyableDataset>(
           "uncopyable");
+
   auto data_loader = torch::data::make_data_loader(
       shared_dataset, torch::data::DataLoaderOptions().workers(3));
 
   for (auto batch : *data_loader) {
     /* exhaust */
   }
-
-  ASSERT_EQ(shared_dataset->thread_ids.size(), 3);
 }
 
 TEST(DataTest, SharedBatchDatasetDoesNotIncurCopyWhenPassedDatasetObject) {
@@ -657,7 +656,7 @@ struct TestIndexDataset
 
 struct TestIndexSampler : public samplers::Sampler<TestIndex> {
   explicit TestIndexSampler(size_t size) : size_(size) {}
-  void reset(torch::optional<size_t> new_size = nullopt) override {}
+  void reset(torch::optional<size_t> new_size = torch::nullopt) override {}
   torch::optional<TestIndex> next(size_t batch_size) override {
     if (index_ >= size_) {
       return torch::nullopt;
@@ -789,15 +788,43 @@ TEST(DataLoaderTest, IteratorsShareState) {
 TEST(DataLoaderTest, CanDereferenceIteratorMultipleTimes) {
   DummyDataset dataset;
   auto data_loader =
-      torch::data::make_data_loader(dataset, dataset.size().value());
-  auto i = data_loader->begin();
-  ASSERT_NE(i, data_loader->end());
-  ASSERT_EQ(i->size(), dataset.size().value());
-  ASSERT_NE(i, data_loader->end());
-  ASSERT_EQ(i->size(), dataset.size().value());
-  ASSERT_NE(i, data_loader->end());
-  ASSERT_EQ(i->size(), dataset.size().value());
-  ASSERT_EQ(++i, data_loader->end());
+      torch::data::make_data_loader<torch::data::samplers::SequentialSampler>(
+          dataset,
+          /*batch_size=*/1);
+  auto iterator = data_loader->begin();
+  std::vector<int> expected = {1};
+  ASSERT_EQ(*iterator, expected);
+  ASSERT_EQ(*iterator, expected);
+  ++iterator;
+  expected[0] = 2;
+  ASSERT_EQ(*iterator, expected);
+  ASSERT_EQ(*iterator, expected);
+  ++iterator;
+  expected[0] = 3;
+  ASSERT_EQ(*iterator, expected);
+  ASSERT_EQ(*iterator, expected);
+}
+
+TEST(DataLoaderTest, CanUseIteratorAlgorithms) {
+  struct D : datasets::BatchDataset<D, int> {
+    int get_batch(torch::ArrayRef<size_t> indices) override {
+      return 1 + indices.front();
+    }
+    torch::optional<size_t> size() const override {
+      return 10;
+    }
+  };
+
+  D dataset;
+  auto data_loader =
+      torch::data::make_data_loader<torch::data::samplers::SequentialSampler>(
+          dataset, 1);
+  std::vector<int> values;
+  std::copy(
+      data_loader->begin(), data_loader->end(), std::back_inserter(values));
+  std::vector<int> expected(dataset.size().value());
+  std::iota(expected.begin(), expected.end(), size_t(1));
+  ASSERT_EQ(values, expected);
 }
 
 TEST(DataLoaderTest, CallingBeginWhileOtherIteratorIsInFlightThrows) {
@@ -1094,39 +1121,90 @@ TEST(DataLoaderTest, TestExceptionsArePropagatedFromWorkers) {
   }
 }
 
+class LargeDataset : public datasets::ChunkDataSet<
+                         LargeDataset,
+                         std::vector<int>,
+                         samplers::RandomSampler,
+                         samplers::RandomSampler> {
+ public:
+  using BatchType = std::vector<int>;
+  using BatchRequestType = size_t;
+
+  LargeDataset(size_t num_chunks, size_t batch_size)
+      : num_chunks_(num_chunks),
+        batch_size_(batch_size),
+        chunk_sampler_(std::move(samplers::RandomSampler(num_chunks))),
+        example_sampler_(std::move(samplers::RandomSampler(batch_size))) {}
+
+  std::vector<int> read_chunk(size_t chunk_index) override {
+    std::vector<int> batch(batch_size_);
+    size_t counter = chunk_index * batch_size_;
+    for (auto& i : batch) {
+      i = counter++;
+    }
+    return batch;
+  }
+
+  samplers::RandomSampler get_chunk_sampler() override {
+    return chunk_sampler_;
+  }
+
+  samplers::RandomSampler get_example_sampler() override {
+    return example_sampler_;
+  }
+
+  size_t get_chunk_count() override {
+    return num_chunks_;
+  }
+
+ private:
+  size_t num_chunks_;
+  size_t batch_size_;
+  samplers::RandomSampler chunk_sampler_;
+  samplers::RandomSampler example_sampler_;
+};
+
 TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
   const size_t kBatchSize = 13;
+  const size_t kNumChunks = 10;
 
-  auto dataset = InfiniteStreamDataset().map(
-      transforms::Lambda<int>([](int x) { return x + 1; }));
+  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
+      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
+
+  auto dataset =
+      shared_dataset->map(transforms::Lambda<int>([](int x) { return x + 1; }));
 
   auto data_loader = torch::data::make_chunk_data_loader(
       std::move(dataset),
       DataLoaderOptions().batch_size(kBatchSize).chunk_loading(true));
 
+  shared_dataset->reset();
   auto iterator = data_loader->begin();
   for (size_t i = 0; i < 3; ++i, ++iterator) {
     ASSERT_NE(iterator, data_loader->end());
     std::vector<int> batch = *iterator;
     ASSERT_EQ(batch.size(), kBatchSize);
     for (size_t j = 0; j < kBatchSize; ++j) {
-      ASSERT_EQ(batch.at(j), 1 + (i * kBatchSize) + j);
+      ASSERT_EQ(batch.at(j), 1 + j);
     }
   }
 }
 
 TEST(DataTest, DataLoaderWithChunkSupportMultiWorkers) {
   const size_t kBatchSize = 13;
+  const size_t kNumChunks = 10;
 
-  InfiniteStreamDataset dataset;
+  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
+      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
 
   auto data_loader = torch::data::make_chunk_data_loader(
-      std::move(dataset),
+      shared_dataset,
       DataLoaderOptions()
           .batch_size(kBatchSize)
           .workers(3)
           .chunk_loading(true));
 
+  shared_dataset->reset();
   auto iterator = data_loader->begin();
   for (size_t i = 0; i < 3; ++i, ++iterator) {
     ASSERT_NE(iterator, data_loader->end());
