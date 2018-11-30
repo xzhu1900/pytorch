@@ -178,23 +178,15 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
           "preloader_count is 0. At least one preloader needs to be specified.");
     }
     chunk_sampler_ =
-        torch::make_unique<samplers::ThreadSafeSampler<ChunkSamplerType>>(
+        std::make_shared<samplers::ThreadSafeSampler<ChunkSamplerType>>(
             ChunkSamplerType(0));
   }
 
-  /// Customize copy constructor. We don't expect user to copy ChunkDataSet
-  /// which inner state. This is error-prone if user changes some internal state
-  /// while DataLoader is using it. Instead, we create a new ChunkDataSet from a
-  /// clean slate, and DataLoader uses shared pointer to reference this
-  /// ChunkDataSet.
-  ChunkDataSet(const ChunkDataSet& data_set)
+  ChunkDataSet(ChunkDataSet&& data_set)
   {
     preloader_count_ = data_set.preloader_count_;
-    chunks_to_load_ = 3;
-    chunk_sampler_ =
-        torch::make_unique<samplers::ThreadSafeSampler<ChunkSamplerType>>(
-            chunks_to_load_);
-    lazy_initialize();
+    chunks_to_load_ = data_set.chunks_to_load_;
+    chunk_sampler_ = std::move(data_set.chunk_sampler_);
   }
 
   virtual ~ChunkDataSet() {
@@ -232,8 +224,16 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
   /// mechanism for the chunk dataset. It simply starts a mini dataloader.
   virtual void reset() {
     chunks_to_load_ = get_chunk_count();
+    chunk_sampler_->reset(chunks_to_load_);
 
-    lazy_initialize();
+    // Creates a new chunk buffer each time we reset the dataset.
+    chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
+        chunks_to_load_);
+
+    for (size_t i = 0; i < preloader_count_; ++i) {
+      preload_threads_.emplace_back(
+          [this, i]() mutable { this->preloader(i); });
+    }
   }
 
   /// size is not used for chunk dataset.
@@ -266,25 +266,12 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
       }
     }
   }
-
-  void lazy_initialize() {
-    chunk_sampler_->reset(chunks_to_load_);
-
-    // Creates a new chunk buffer each time we reset the dataset.
-    chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
-        chunks_to_load_);
-
-    for (size_t i = 0; i < preloader_count_; ++i) {
-      preload_threads_.emplace_back(
-          [this, i]() mutable { this->preloader(i); });
-    }
-  }
  private:
  // chunk index sampler.
-  std::unique_ptr<samplers::ThreadSafeSampler<ChunkSampler>> chunk_sampler_;
+  std::shared_ptr<samplers::ThreadSafeSampler<ChunkSampler>> chunk_sampler_;
 
   // chunk data buffer which holds chunk data from preloading thread.
-  std::unique_ptr<ChunkDataBuffer<BatchType, ExampleSampler>> chunk_buffer_;
+  std::shared_ptr<ChunkDataBuffer<BatchType, ExampleSampler>> chunk_buffer_;
 
   // worker thread pool
   std::vector<std::thread> preload_threads_;
