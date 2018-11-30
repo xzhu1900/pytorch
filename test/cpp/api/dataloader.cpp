@@ -94,7 +94,7 @@ public:
     BatchType batchData;
     int start_index = chunk_index == 0
         ? 0
-        : std::accumulate(chunkSize, chunkSize + chunk_index - 1, 0);
+        : std::accumulate(chunkSize, chunkSize + chunk_index, 0);
 
         batchData.resize(chunkSize[chunk_index]);
 
@@ -112,30 +112,28 @@ TEST(DataTest, ChunkDataSetGetBatch) {
   const size_t batch_sizes[] = {5, 7};
 
   for (auto prefetch_count : prefetch_counts) {
-    for(auto batch_size : batch_sizes){
-
+    for (auto batch_size : batch_sizes) {
       datasets::SharedBatchDataset<DummyChunkDataset> dataset =
-      datasets::make_shared_dataset<DummyChunkDataset>(prefetch_count);
-
-      dataset->reset();
+          datasets::make_shared_dataset<DummyChunkDataset>(prefetch_count);
 
       auto data_loader = torch::data::make_chunk_data_loader(
-          std::move(*dataset),
+          dataset,
           DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
+
+      dataset->reset();
 
       std::vector<bool> result(35, false);
 
       auto iterator = data_loader->begin();
-      for (size_t i = 0; iterator!=data_loader->end(); ++i, ++iterator) {
+      for (size_t i = 0; i < (35 / batch_size); ++i, ++iterator) {
         std::vector<int> batch = *iterator;
         ASSERT_EQ(batch.size(), batch_size);
         for (size_t j = 0; j < batch_size; ++j) {
-          result[j] = true;
+          result[batch[j]] = true;
         }
       }
 
-      for(auto data : result)
-      {
+      for (auto data : result) {
         ASSERT_EQ(data, true);
       }
     }
