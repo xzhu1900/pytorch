@@ -1065,7 +1065,6 @@ class LargeDataset : public datasets::ChunkDataSet<
  public:
   using BatchType = std::vector<int>;
   using BatchRequestType = size_t;
-#include <iostream>
   LargeDataset(size_t num_chunks, size_t batch_size)
       : num_chunks_(num_chunks),
         batch_size_(batch_size),
@@ -1073,7 +1072,6 @@ class LargeDataset : public datasets::ChunkDataSet<
         example_sampler_(std::move(samplers::RandomSampler(batch_size))) {}
 
   std::vector<int> read_chunk(size_t chunk_index) override {
-    std::cout<<"Calling read_chunk on this" <<this<<std::endl;
     std::vector<int> batch(batch_size_);
     size_t counter = chunk_index * batch_size_;
     for (auto& i : batch) {
@@ -1093,10 +1091,6 @@ class LargeDataset : public datasets::ChunkDataSet<
   size_t get_chunk_count() override {
     return num_chunks_;
   }
-
-  void reset() override{
-    std::cout<<"Calling reset on this" <<this<<std::endl;
-      }
 
  private:
   size_t num_chunks_;
