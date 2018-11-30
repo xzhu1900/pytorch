@@ -1,0 +1,11 @@
+{
+"fileType": [
+    "feature",
+    "label"
+],
+"fileInfo": [
+    {"name":"chunk0","count":128},
+    {"name":"chunk1","count":128},
+    {"name":"chunk2","count":128}
+]
+}
