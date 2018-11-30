@@ -14,7 +14,7 @@ namespace datasets {
 
 /// A `MapDataset` is a dataset that applies a transform to a source dataset.
 template <typename SourceDataset, typename AppliedTransform>
-struct MapDataset : BatchDataset<
+struct MapDataset : public BatchDataset<
                         MapDataset<SourceDataset, AppliedTransform>,
                         typename AppliedTransform::OutputBatchType,
                         typename SourceDataset::BatchRequestType> {
