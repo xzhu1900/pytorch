@@ -7,6 +7,7 @@
 #include <torch/csrc/utils/memory.h>
 
 #include <thread>
+#include <atomic>
 
 namespace torch {
 namespace data {
@@ -187,12 +188,11 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
     preloader_count_ = data_set.preloader_count_;
     chunks_to_load_ = data_set.chunks_to_load_;
     chunk_sampler_ = std::move(data_set.chunk_sampler_);
+    quit_worker_ = std::move(data_set.quit_worker_);
   }
 
   virtual ~ChunkDataSet() {
-    for (auto& worker_thread : preload_threads_) {
-      worker_thread.join();
-    }
+    free_workers();
   }
 
   /// Read an entire chunk. A derived class needs to override this method.
@@ -230,6 +230,13 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
     chunk_buffer_ = torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
         chunks_to_load_);
 
+    // free any created worker from previous reset.
+    free_workers();
+    preload_threads_.clear();
+
+    // create new workers for this new epoch.
+    quit_worker_ = false;
+
     for (size_t i = 0; i < preloader_count_; ++i) {
       preload_threads_.emplace_back(
           [this, i]() mutable { this->preloader(i); });
@@ -245,7 +252,7 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
 
   /// running on worker thread to preload chunk data.
   void preloader(size_t id) {
-    while (true) {
+    while (!quit_worker_.load()) {
       size_t chunk_id;
       try {
         if (chunks_to_load_ > 0) {
@@ -266,8 +273,19 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
       }
     }
   }
+
+  /// Block the current thread until the workers finish execution and exit.
+  void free_workers() {
+    if (!quit_worker_.load()) {
+      quit_worker_ = true;
+      for (auto& worker_thread : preload_threads_) {
+        worker_thread.join();
+      }
+    }
+  }
+
  private:
- // chunk index sampler.
+  // chunk index sampler.
   std::shared_ptr<samplers::ThreadSafeSampler<ChunkSampler>> chunk_sampler_;
 
   // chunk data buffer which holds chunk data from preloading thread.
@@ -281,6 +299,8 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
 
   // worker thread count
   size_t preloader_count_ = 0;
+
+  std::atomic<bool> quit_worker_{false};
 };
 } // namespace datasets
 } // namespace data
