@@ -1206,8 +1206,8 @@ TEST(DataLoaderTest, TestExceptionsArePropagatedFromWorkers) {
 class LargeDataset : public datasets::ChunkDataSet<
                          LargeDataset,
                          std::vector<int>,
-                         samplers::RandomSampler,
-                         samplers::RandomSampler> {
+                         samplers::SequentialSampler,
+                         samplers::SequentialSampler> {
  public:
   using BatchType = std::vector<int>;
   using BatchRequestType = size_t;
@@ -1215,12 +1215,12 @@ class LargeDataset : public datasets::ChunkDataSet<
       : datasets::ChunkDataSet<
                          LargeDataset,
                          std::vector<int>,
-                         samplers::RandomSampler,
-                         samplers::RandomSampler> (1),
+                         samplers::SequentialSampler,
+                         samplers::SequentialSampler> (1),
         num_chunks_(num_chunks),
         batch_size_(batch_size),
-        chunk_sampler_(std::move(samplers::RandomSampler(num_chunks))),
-        example_sampler_(std::move(samplers::RandomSampler(batch_size))) {}
+        chunk_sampler_(std::move(samplers::SequentialSampler(num_chunks))),
+        example_sampler_(std::move(samplers::SequentialSampler(batch_size))) {}
 
   std::vector<int> read_chunk(size_t chunk_index) override {
     std::vector<int> batch(batch_size_);
@@ -1231,11 +1231,11 @@ class LargeDataset : public datasets::ChunkDataSet<
     return batch;
   }
 
-  samplers::RandomSampler get_chunk_sampler() override {
+  samplers::SequentialSampler get_chunk_sampler() override {
     return chunk_sampler_;
   }
 
-  samplers::RandomSampler get_example_sampler() override {
+  samplers::SequentialSampler get_example_sampler() override {
     return example_sampler_;
   }
 
@@ -1246,8 +1246,8 @@ class LargeDataset : public datasets::ChunkDataSet<
  private:
   size_t num_chunks_;
   size_t batch_size_;
-  samplers::RandomSampler chunk_sampler_;
-  samplers::RandomSampler example_sampler_;
+  samplers::SequentialSampler chunk_sampler_;
+  samplers::SequentialSampler example_sampler_;
 };
 
 TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
@@ -1271,7 +1271,7 @@ TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
     std::vector<int> batch = *iterator;
     ASSERT_EQ(batch.size(), kBatchSize);
     for (size_t j = 0; j < kBatchSize; ++j) {
-      ASSERT_EQ(batch.at(j), 1 + j);
+      ASSERT_EQ(batch.at(j), 1 + j + i * kBatchSize);
     }
   }
 }
