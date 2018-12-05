@@ -236,7 +236,6 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
 
   ChunkDataSet(ChunkDataSet&& data_set) {
     preloader_count_ = data_set.preloader_count_;
-    chunks_to_load_ = data_set.chunks_to_load_;
     chunk_sampler_ = std::move(data_set.chunk_sampler_);
     quit_worker_ = data_set.quit_worker_.load();
   }
@@ -277,11 +276,11 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
     free_workers();
     preload_threads_.clear();
 
-    chunks_to_load_ = get_chunk_count();
+    size_t chunks_to_load = get_chunk_count();
     chunk_sampler_ =
         std::make_shared<samplers::ThreadSafeSampler<ChunkSamplerType>>(
             get_chunk_sampler());
-    chunk_sampler_->reset(chunks_to_load_);
+    chunk_sampler_->reset(chunks_to_load);
 
     // Creates a new chunk buffer each time we reset the dataset.
     chunk_buffer_ =
@@ -308,14 +307,9 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
     while (!quit_worker_.load()) {
       size_t chunk_id;
       try {
-        if (chunks_to_load_ > 0) {
-          auto chunk_sampler_result = chunk_sampler_->next(1);
-          AT_ASSERT(
-              chunk_sampler_result &&
-              chunk_sampler_result.value().size() ==
-                  1); // assert the sampler is not exhausted
+        auto chunk_sampler_result = chunk_sampler_->next(1);
+        if (chunk_sampler_result.has_value()) {
           chunk_id = chunk_sampler_result.value()[0];
-          chunks_to_load_--;
         } else {
           break;
         }
@@ -360,9 +354,6 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
 
   // worker thread pool
   std::vector<std::thread> preload_threads_;
-
-  // total number of chunks to load
-  size_t chunks_to_load_ = 0;
 
   // worker thread count
   size_t preloader_count_ = 0;
