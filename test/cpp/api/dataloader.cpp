@@ -59,8 +59,8 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
   ASSERT_EQ(batch, expected);
 }
 
-struct DummyChunkDataset : public datasets::ChunkDataSet<
-                               DummyChunkDataset,
+struct DummyChunkDatasetBase : public datasets::ChunkDataSet<
+                               DummyChunkDatasetBase,
                                std::vector<int>,
                                samplers::SequentialSampler,
                                samplers::SequentialSampler> {
@@ -69,26 +69,25 @@ public:
   using ChunkSamplerType = samplers::SequentialSampler;
   using ExampleSamplerType = samplers::SequentialSampler;
 
-  DummyChunkDataset(size_t prefetch_count)
+  DummyChunkDatasetBase(size_t prefetch_count)
       : datasets::ChunkDataSet<
-            DummyChunkDataset,
+            DummyChunkDatasetBase,
             BatchType,
             ChunkSamplerType,
-            ExampleSamplerType>(prefetch_count){};
+            ExampleSamplerType>(prefetch_count, false){};
 
-  /// dummy getter
   ChunkSamplerType get_chunk_sampler() override {
     return ChunkSamplerType(0);
   };
 
-  /// dummy getter
   ExampleSamplerType get_example_sampler() override {
     return ExampleSamplerType(0);
   };
+};
 
-  size_t get_chunk_count() override {
-    return chunk_size_;
-  }
+struct DummyChunkDataset : public DummyChunkDatasetBase {
+  DummyChunkDataset(size_t prefetch_count)
+      : DummyChunkDatasetBase(prefetch_count){};
 
   BatchType read_chunk(size_t chunk_index) override {
     BatchType batchData;
@@ -103,8 +102,25 @@ public:
     return batchData;
   }
 
+  size_t get_chunk_count() override {
+    return chunk_size_;
+  }
+
   const static size_t chunk_size_ = 3;
   size_t chunkSize[chunk_size_] = {10, 5, 20};
+};
+
+struct DummyEmptyChunkDataset : public DummyChunkDatasetBase {
+  DummyEmptyChunkDataset(size_t prefetch_count)
+      : DummyChunkDatasetBase(prefetch_count){};
+
+  size_t get_chunk_count() override {
+    return 1;
+  }
+
+  BatchType read_chunk(size_t chunk_index) override {
+    return BatchType();
+  }
 };
 
 TEST(DataTest, ChunkDataSetGetBatch) {
@@ -138,6 +154,21 @@ TEST(DataTest, ChunkDataSetGetBatch) {
       }
     }
   }
+}
+
+TEST(DataTest, EmptyChunkDataSetGetBatch) {
+  const size_t prefetch_count = 1;
+  const size_t batch_size = 5;
+
+  datasets::SharedBatchDataset<DummyEmptyChunkDataset> dataset =
+      datasets::make_shared_dataset<DummyEmptyChunkDataset>(prefetch_count);
+
+  auto data_loader = torch::data::make_chunk_data_loader(
+      dataset, DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
+
+  dataset->reset();
+  auto iterator = data_loader->begin();
+  ASSERT_THROWS_WITH(*iterator, "Chunk with index 0 is empty");
 }
 
 struct InfiniteStreamDataset
@@ -1216,7 +1247,7 @@ class LargeDataset : public datasets::ChunkDataSet<
                          LargeDataset,
                          std::vector<int>,
                          samplers::SequentialSampler,
-                         samplers::SequentialSampler> (1),
+                         samplers::SequentialSampler> (1, false),
         num_chunks_(num_chunks),
         batch_size_(batch_size),
         chunk_sampler_(std::move(samplers::SequentialSampler(num_chunks))),
