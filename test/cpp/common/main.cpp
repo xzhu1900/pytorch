@@ -16,7 +16,12 @@ std::string add_negative_flag(const std::string& flag) {
   return filter;
 }
 
+std::string c_dataset_worker;
+std::string c_dataloader_worker;
+
 int main(int argc, char* argv[]) {
+  c_dataset_worker = argv[2];
+  c_dataloader_worker = argv[3];
   ::testing::InitGoogleTest(&argc, argv);
   if (!torch::cuda::is_available()) {
     std::cout << "CUDA not available. Disabling CUDA and MultiCUDA tests"
