@@ -59,43 +59,19 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
   ASSERT_EQ(batch, expected);
 }
 
-struct DummyChunkDatasetBase : public datasets::ChunkDataSet<
-                               DummyChunkDatasetBase,
-                               std::vector<int>,
-                               samplers::SequentialSampler,
-                               samplers::SequentialSampler> {
-public:
+struct DummyChunkDataReader
+    : public datasets::ChunkDataReader<DummyChunkDataReader, std::vector<int>> {
+ public:
   using BatchType = std::vector<int>;
-  using ChunkSamplerType = samplers::SequentialSampler;
-  using ExampleSamplerType = samplers::SequentialSampler;
 
-  DummyChunkDatasetBase(size_t prefetch_count)
-      : datasets::ChunkDataSet<
-            DummyChunkDatasetBase,
-            BatchType,
-            ChunkSamplerType,
-            ExampleSamplerType>(prefetch_count, false){};
-
-  ChunkSamplerType get_chunk_sampler() override {
-    return ChunkSamplerType(0);
-  };
-
-  ExampleSamplerType get_example_sampler() override {
-    return ExampleSamplerType(0);
-  };
-};
-
-struct DummyChunkDataset : public DummyChunkDatasetBase {
-  DummyChunkDataset(size_t prefetch_count)
-      : DummyChunkDatasetBase(prefetch_count){};
-
+  /// Read an entire chunk.
   BatchType read_chunk(size_t chunk_index) override {
     BatchType batchData;
     int start_index = chunk_index == 0
         ? 0
         : std::accumulate(chunkSize, chunkSize + chunk_index, 0);
 
-        batchData.resize(chunkSize[chunk_index]);
+    batchData.resize(chunkSize[chunk_index]);
 
     std::iota(batchData.begin(), batchData.end(), start_index);
 
@@ -104,71 +80,199 @@ struct DummyChunkDataset : public DummyChunkDatasetBase {
 
   size_t get_chunk_count() override {
     return chunk_size_;
-  }
+  };
+
+  void reset() override{};
 
   const static size_t chunk_size_ = 3;
   size_t chunkSize[chunk_size_] = {10, 5, 20};
 };
 
-struct DummyEmptyChunkDataset : public DummyChunkDatasetBase {
-  DummyEmptyChunkDataset(size_t prefetch_count)
-      : DummyChunkDatasetBase(prefetch_count){};
-
-  size_t get_chunk_count() override {
-    return 1;
-  }
-
-  BatchType read_chunk(size_t chunk_index) override {
-    return BatchType();
-  }
-};
-
 TEST(DataTest, ChunkDataSetGetBatch) {
   const size_t prefetch_counts[] = {1, 2, 3, 4};
   const size_t batch_sizes[] = {5, 7};
+  DummyChunkDataReader data_reader;
+  samplers::SequentialSampler sampler(0);
+  const int epoch_count = 2;
 
   for (auto prefetch_count : prefetch_counts) {
     for (auto batch_size : batch_sizes) {
-      datasets::SharedBatchDataset<DummyChunkDataset> dataset =
-          datasets::make_shared_dataset<DummyChunkDataset>(prefetch_count);
+      datasets::SharedBatchDataset<datasets::ChunkDataSet<
+          DummyChunkDataReader,
+          samplers::SequentialSampler,
+          samplers::SequentialSampler>>
+          dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+              DummyChunkDataReader,
+              samplers::SequentialSampler,
+              samplers::SequentialSampler>>(
+              data_reader, sampler, sampler, prefetch_count, batch_size);
 
       auto data_loader = torch::data::make_chunk_data_loader(
           dataset,
           DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
 
-      dataset->reset();
+      for (int epoch_index = 0; epoch_index < epoch_count; ++epoch_index) {
+        dataset->reset();
 
-      std::vector<bool> result(35, false);
+        std::vector<bool> result(35, false);
 
-      auto iterator = data_loader->begin();
-      for (size_t i = 0; i < (35 / batch_size); ++i, ++iterator) {
-        std::vector<int> batch = *iterator;
-        ASSERT_EQ(batch.size(), batch_size);
-        for (size_t j = 0; j < batch_size; ++j) {
-          result[batch[j]] = true;
+        auto iterator = data_loader->begin();
+        for (size_t i = 0; i < (35 / batch_size); ++i, ++iterator) {
+          ASSERT_TRUE(iterator->has_value());
+          std::vector<int> batch = iterator->value();
+          ASSERT_EQ(batch.size(), batch_size);
+          if (prefetch_count == 1) {
+            for (size_t j = 0; j < batch_size; ++j) {
+              ASSERT_EQ(batch[j], i * batch_size + j);
+            }
+          }
+          for (size_t j = 0; j < batch_size; ++j) {
+            result[batch[j]] = true;
+          }
         }
-      }
 
-      for (auto data : result) {
-        ASSERT_EQ(data, true);
+        for (auto data : result) {
+          ASSERT_EQ(data, true);
+        }
       }
     }
   }
 }
 
-TEST(DataTest, EmptyChunkDataSetGetBatch) {
+TEST(DataTest, ChunkDataSetBatchSizeMismatch) {
   const size_t prefetch_count = 1;
   const size_t batch_size = 5;
+  const size_t requested_batch_size = 6;
 
-  datasets::SharedBatchDataset<DummyEmptyChunkDataset> dataset =
-      datasets::make_shared_dataset<DummyEmptyChunkDataset>(prefetch_count);
+  DummyChunkDataReader data_reader;
+  samplers::SequentialSampler sampler(0);
+
+  datasets::SharedBatchDataset<datasets::ChunkDataSet<
+      DummyChunkDataReader,
+      samplers::SequentialSampler,
+      samplers::SequentialSampler>>
+      dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+          DummyChunkDataReader,
+          samplers::SequentialSampler,
+          samplers::SequentialSampler>>(
+          data_reader, sampler, sampler, prefetch_count, batch_size);
+
+  auto data_loader = torch::data::make_chunk_data_loader(
+      dataset,
+      DataLoaderOptions(requested_batch_size).workers(0).chunk_loading(true));
+
+  dataset->reset();
+
+  auto iterator = data_loader->begin();
+
+  std::string exception_msg =
+      "The requested batch size does not match with the initialized batch size.\n"
+      " The requested batch size is 6, while the data set is created with batch size equal to 5";
+
+  ASSERT_THROWS_WITH(iterator->has_value(), exception_msg);
+}
+
+TEST(DataTest, ChunkDataSetInvalidInitParameter) {
+  DummyChunkDataReader data_reader;
+  samplers::SequentialSampler sampler(0);
+
+  auto initialization_function = [&](size_t preloader_count, size_t batch_size, size_t cache_size){
+    datasets::SharedBatchDataset<datasets::ChunkDataSet<
+          DummyChunkDataReader,
+          samplers::SequentialSampler,
+          samplers::SequentialSampler>> dataset =
+          datasets::make_shared_dataset<datasets::ChunkDataSet<
+              DummyChunkDataReader,
+              samplers::SequentialSampler,
+              samplers::SequentialSampler>>(
+              data_reader, sampler, sampler, preloader_count, batch_size, false, cache_size);
+  };
+
+  ASSERT_THROWS_WITH(
+      initialization_function(0, 1, 1),
+      "preloader_count is 0. At least one preloader needs to be specified.");
+
+  ASSERT_THROWS_WITH(
+      initialization_function(1, 0, 1),
+      "batch size is 0. A positive batch size needs to be specified.");
+
+  ASSERT_THROWS_WITH(
+      initialization_function(1, 1, 0),
+      "cache size is 0. A positive cache size needs to be specified.");
+}
+
+struct DummyEmptyChunkDataReader
+    : public datasets::
+          ChunkDataReader<DummyEmptyChunkDataReader, std::vector<int>> {
+ public:
+  using BatchType = std::vector<int>;
+
+  /// Read an entire chunk.
+  BatchType read_chunk(size_t chunk_index) override {
+    return {};
+  }
+
+  size_t get_chunk_count() override {
+    return chunk_size_;
+  };
+
+  void reset() override{};
+
+  const static size_t chunk_size_ = 3;
+  size_t chunkSize[chunk_size_] = {10, 5, 20};
+};
+
+TEST(DataTest, ChunkDataSetEmptyBatchThrowException) {
+  const size_t prefetch_count = 1;
+  const size_t batch_size = 5;
+  DummyEmptyChunkDataReader data_reader;
+  samplers::SequentialSampler sampler(0);
+
+  datasets::SharedBatchDataset<datasets::ChunkDataSet<
+      DummyEmptyChunkDataReader,
+      samplers::SequentialSampler,
+      samplers::SequentialSampler>>
+      dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+          DummyEmptyChunkDataReader,
+          samplers::SequentialSampler,
+          samplers::SequentialSampler>>(
+          data_reader, sampler, sampler, prefetch_count, batch_size);
 
   auto data_loader = torch::data::make_chunk_data_loader(
       dataset, DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
 
   dataset->reset();
+
   auto iterator = data_loader->begin();
-  ASSERT_THROWS_WITH(*iterator, "Chunk with index 0 is empty");
+  ASSERT_THROWS_WITH(iterator->has_value(), "Chunk with index 0 is empty");
+}
+
+TEST(DataTest, ChunkDataSetEmptyBatchIgnoreEmptyChunk) {
+  const size_t prefetch_count = 1;
+  const size_t batch_size = 5;
+  DummyEmptyChunkDataReader data_reader;
+  samplers::SequentialSampler sampler(0);
+
+  datasets::SharedBatchDataset<datasets::ChunkDataSet<
+      DummyEmptyChunkDataReader,
+      samplers::SequentialSampler,
+      samplers::SequentialSampler>>
+      dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+          DummyEmptyChunkDataReader,
+          samplers::SequentialSampler,
+          samplers::SequentialSampler>>(
+          data_reader, sampler, sampler, prefetch_count, batch_size, true);
+
+  auto data_loader = torch::data::make_chunk_data_loader(
+      dataset, DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
+
+  dataset->reset();
+
+  auto iterator = data_loader->begin();
+  for (size_t i = 0; i < (35 / batch_size); ++i, ++iterator) {
+    std::vector<int> batch = iterator->value();
+    ASSERT_EQ(batch.size(), 0);
+  }
 }
 
 struct InfiniteStreamDataset
@@ -1230,102 +1334,5 @@ TEST(DataLoaderTest, TestExceptionsArePropagatedFromWorkers) {
                     "Original message: badness"));
     ASSERT_THROW(
         std::rethrow_exception(e.original_exception), std::invalid_argument);
-  }
-}
-
-
-class LargeDataset : public datasets::ChunkDataSet<
-                         LargeDataset,
-                         std::vector<int>,
-                         samplers::SequentialSampler,
-                         samplers::SequentialSampler> {
- public:
-  using BatchType = std::vector<int>;
-  using BatchRequestType = size_t;
-  LargeDataset(size_t num_chunks, size_t batch_size)
-      : datasets::ChunkDataSet<
-                         LargeDataset,
-                         std::vector<int>,
-                         samplers::SequentialSampler,
-                         samplers::SequentialSampler> (1, false),
-        num_chunks_(num_chunks),
-        batch_size_(batch_size),
-        chunk_sampler_(std::move(samplers::SequentialSampler(num_chunks))),
-        example_sampler_(std::move(samplers::SequentialSampler(batch_size))) {}
-
-  std::vector<int> read_chunk(size_t chunk_index) override {
-    std::vector<int> batch(batch_size_);
-    size_t counter = chunk_index * batch_size_;
-    for (auto& i : batch) {
-      i = counter++;
-    }
-    return batch;
-  }
-
-  samplers::SequentialSampler get_chunk_sampler() override {
-    return chunk_sampler_;
-  }
-
-  samplers::SequentialSampler get_example_sampler() override {
-    return example_sampler_;
-  }
-
-  size_t get_chunk_count() override {
-    return num_chunks_;
-  }
-
- private:
-  size_t num_chunks_;
-  size_t batch_size_;
-  samplers::SequentialSampler chunk_sampler_;
-  samplers::SequentialSampler example_sampler_;
-};
-
-TEST(DataTest, DataLoaderWithChunkSupportSingleWorker) {
-  const size_t kBatchSize = 13;
-  const size_t kNumChunks = 10;
-
-  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
-      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
-
-  auto dataset =
-      shared_dataset.map(transforms::Lambda<int>([](int x) { return x + 1; }));
-
-  auto data_loader = torch::data::make_chunk_data_loader(
-      std::move(dataset),
-      DataLoaderOptions().batch_size(kBatchSize).chunk_loading(true));
-
-  shared_dataset->reset();
-  auto iterator = data_loader->begin();
-  for (size_t i = 0; i < 3; ++i, ++iterator) {
-    ASSERT_NE(iterator, data_loader->end());
-    std::vector<int> batch = *iterator;
-    ASSERT_EQ(batch.size(), kBatchSize);
-    for (size_t j = 0; j < kBatchSize; ++j) {
-      ASSERT_EQ(batch.at(j), 1 + j + i * kBatchSize);
-    }
-  }
-}
-
-TEST(DataTest, DataLoaderWithChunkSupportMultiWorkers) {
-  const size_t kBatchSize = 13;
-  const size_t kNumChunks = 10;
-
-  datasets::SharedBatchDataset<LargeDataset> shared_dataset =
-      datasets::make_shared_dataset<LargeDataset>(kNumChunks, kBatchSize);
-
-  auto data_loader = torch::data::make_chunk_data_loader(
-      shared_dataset,
-      DataLoaderOptions()
-          .batch_size(kBatchSize)
-          .workers(3)
-          .chunk_loading(true));
-
-  shared_dataset->reset();
-  auto iterator = data_loader->begin();
-  for (size_t i = 0; i < 3; ++i, ++iterator) {
-    ASSERT_NE(iterator, data_loader->end());
-    std::vector<int> batch = *iterator;
-    ASSERT_EQ(batch.size(), kBatchSize);
   }
 }
