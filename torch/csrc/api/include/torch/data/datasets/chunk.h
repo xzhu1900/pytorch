@@ -74,10 +74,11 @@ class ChunkDataBuffer {
  public:
   using BatchType = Batch;
   using BatchRequestType = typename ExampleSampler::BatchRequestType;
-  ChunkDataBuffer(size_t num_chunks, ExampleSampler example_sampler, bool ignore_empty_chunk)
+  ChunkDataBuffer(size_t num_chunks, ExampleSampler example_sampler, bool ignore_empty_chunk, size_t cache_size)
       : remaining_chunk_count_(num_chunks),
         example_sampler_(std::move(example_sampler)),
-        ignore_empty_chunk_(ignore_empty_chunk) {}
+        ignore_empty_chunk_(ignore_empty_chunk),
+        queue_depth_(cache_size) {}
 
   /// Return batch data from the queue. Called from the ChunkDataSet main
   /// thread.
@@ -157,7 +158,7 @@ class ChunkDataBuffer {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     cvw_.wait(lock, [this] {
       // stop loading if we have preloaded enough data.
-      return this->total_example_count_in_queue_ < queue_depth_s;
+      return this->total_example_count_in_queue_ < queue_depth_;
     });
 
     ChunkData<BatchType, ExampleSampler> chunk_data(
@@ -174,7 +175,7 @@ class ChunkDataBuffer {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     cvw_.wait(lock, [this] {
       // stop loading if we have preloaded enough data.
-      return this->total_example_count_in_queue_ < queue_depth_s;
+      return this->total_example_count_in_queue_ < queue_depth_;
     });
     ChunkData<BatchType, ExampleSampler> chunk_data(
         index, example_sampler_, e_ptr);
@@ -197,10 +198,11 @@ class ChunkDataBuffer {
   std::mutex batch_mutex_;
   std::condition_variable cvr_;
   std::condition_variable cvw_;
-  static const size_t queue_depth_s = 500;
 
   ExampleSampler example_sampler_;
   bool ignore_empty_chunk_ = false;
+
+  size_t queue_depth_;
 };
 
 /// A stateful dataset that support hierarchical sampling and prefetching of
@@ -227,10 +229,18 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
   using ChunkSamplerType = ChunkSampler;
   using ExampleSamplerType = ExampleSampler;
 
-  ChunkDataSet(size_t preloader_count, bool ignore_empty_chunk) : preloader_count_(preloader_count), ignore_empty_chunk_(ignore_empty_chunk) {
+  ChunkDataSet(size_t preloader_count, bool ignore_empty_chunk = false, size_t cache_size = 500)
+  : preloader_count_(preloader_count),
+    ignore_empty_chunk_(ignore_empty_chunk),
+    cache_size_(cache_size) {
     if (preloader_count_ == 0) {
       throw std::runtime_error(
           "preloader_count is 0. At least one preloader needs to be specified.");
+    }
+
+    if (cache_size_ == 0) {
+      throw std::runtime_error(
+          "cache size is 0. A positive cache size needs to be specified.");
     }
   }
 
@@ -285,7 +295,7 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
     // Creates a new chunk buffer each time we reset the dataset.
     chunk_buffer_ =
         torch::make_unique<ChunkDataBuffer<BatchType, ExampleSamplerType>>(
-            chunks_to_load, get_example_sampler(), ignore_empty_chunk_);
+            chunks_to_load, get_example_sampler(), ignore_empty_chunk_, cache_size_);
 
     // create new workers for this new epoch.
     quit_worker_ = false;
@@ -327,7 +337,7 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
 
         else
         {
-          chunk_buffer_->add_chunk_data(chunk_id, this->read_chunk(chunk_id));
+          chunk_buffer_->add_chunk_data(chunk_id, std::move(data));
         }
       } catch (...) {
         chunk_buffer_->add_chunk_data(chunk_id, std::current_exception());
@@ -364,6 +374,8 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
   bool ignore_empty_chunk_ = false;
 
   std::atomic<bool> quit_worker_{false};
+
+  size_t cache_size_;
 };
 } // namespace datasets
 } // namespace data
