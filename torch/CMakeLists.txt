@@ -237,8 +237,6 @@ if (NOT NO_API AND NOT USE_ROCM)
     ${TORCH_SRC_DIR}/csrc/api/src/data/samplers/sequential.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/samplers/stream.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/ctf/reader.cpp
-    ${TORCH_SRC_DIR}/csrc/api/src/data/ctf/ctf_parser.cpp
-    ${TORCH_SRC_DIR}/csrc/api/src/data/ctf/ctf_chunk_dataset.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/jit.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/nn/init.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/nn/module.cpp

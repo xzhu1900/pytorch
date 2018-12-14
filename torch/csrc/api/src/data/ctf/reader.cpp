@@ -19,9 +19,7 @@ namespace ctf {
 Reader::~Reader() {}
 
 Reader::Reader(const std::string& filename)
-    : filename_(filename),
-      file_pos_(0),
-      is_eof_(false) {
+    : filename_(filename), file_pos_(0), is_eof_(false) {
   std::FILE* const tmp = fopen(filename_.c_str(), "rbS");
   if (!tmp) {
     std::string error_msg(
