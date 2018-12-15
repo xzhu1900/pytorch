@@ -44,7 +44,7 @@ static bool is_little_endian_  = is_little_endian();
 struct Utterance
 {
   std::vector<float> feature;
-  std::vector<int32_t> label;
+  std::vector<uint16_t> label; // The models speech team have are about 10k labels. so ushort is more than enougth.
   std::vector<uint8_t> lattice;
 };
 
@@ -127,11 +127,42 @@ static void ReadDataArray(char* buffer, size_t& start_pos, T *value, size_t byte
   start_pos += byte_length;
 }
 
+template <typename T>
+static void ReadEncodedDataArray(char* buffer, size_t& start_pos, T *value, size_t full_length, size_t byte_length)
+{
+  size_t value_size = sizeof(T);
+  size_t decoded_array_len = full_length / sizeof(uint32_t);
+
+  size_t binary_array_len = byte_length / value_size;
+  T encoded_data[binary_array_len];
+
+  if(binary_array_len % 2 != 0)
+  {
+      std::string error_msg = "Encoded label data corrupted. Expected binary is not a multiplication of 2";
+      throw std::runtime_error(error_msg);
+  }
+
+  size_t label_count = binary_array_len / 2;
+
+  memcpy(encoded_data, buffer+start_pos, byte_length);
+
+  size_t decoded_index = 0;
+  for(int i=0;i<label_count;++i){
+      T label = is_little_endian_? swap_endian<T>(encoded_data[2 * i]) : encoded_data[2 * i];
+      T duplicate_count = is_little_endian_? swap_endian<T>(encoded_data[2 * i + 1]) : encoded_data[2 * i + 1];
+      assert(decoded_index + duplicate_count <=  decoded_array_len);
+      std::fill_n(value + decoded_index, duplicate_count, label);
+      decoded_index += duplicate_count;
+  }
+  assert(decoded_index == decoded_array_len);
+  start_pos += byte_length;
+}
+
 class HTKParser
 {
 public:
   using FeatureType = float;
-  using LabelType = int32_t;
+  using LabelType = uint16_t;
   using LatticeType = uint8_t;
 
   explicit HTKParser(const string &file_directory, const string &file_set_name);
@@ -147,6 +178,8 @@ public:
 private:
   HTKParser() = delete;
   void parse_file_set(const string &file_set_name);
+
+  void parse_encoded_data(const std::string &file_name, const size_t chunk_size, std::vector<Utterance> &data);
 
   template <typename T>
   void parse_data(const std::string &file_name, const std::string &target_name, const size_t chunk_size, std::vector<Utterance> &data)
@@ -187,6 +220,8 @@ private:
           throw std::runtime_error(error_msg);
         }
   #endif
+
+        // TODO: we don't need to parse all data_nyte_size data, if it is greater than truncated_dim * feature dim.
         uint32_t data_byte_size = ReadData<uint32_t>(buffer.data(), start_pos);
 
         if (data_byte_size % sizeof(T) != 0)
@@ -202,23 +237,35 @@ private:
         {
           data[element_count].feature.resize(data_size);
           data_ptr = reinterpret_cast<void *>(data[element_count].feature.data());
+          ReadDataArray(buffer.data(), start_pos, reinterpret_cast<T *>(data_ptr), data_byte_size);
         }
         else if (target_name == "Lattice")
         {
           data[element_count].lattice.resize(data_size);
           data_ptr = reinterpret_cast<void *>(data[element_count].lattice.data());
+          ReadDataArray(buffer.data(), start_pos, reinterpret_cast<T *>(data_ptr), data_byte_size);
         }
         else if (target_name == "Label")
         {
           data[element_count].label.resize(data_size);
           data_ptr = reinterpret_cast<void *>(data[element_count].label.data());
+
+          uint16_t encoded_byte_size = ReadData<uint16_t>(buffer.data(), start_pos);
+
+          if(encoded_byte_size % sizeof(uint16_t) != 0)
+          {
+              std::string error_msg = "Encoded label data corrupted. Expected binary is not a multiplication of " + std::to_string(sizeof(uint16_t));
+              throw std::runtime_error(error_msg);
+          }
+
+          ReadEncodedDataArray(buffer.data(), start_pos, reinterpret_cast<T *>(data_ptr), data_byte_size, encoded_byte_size);
         }
         else
         {
           std::string error_msg = "unknown field " + target_name;
           throw std::runtime_error(error_msg);
         }
-        ReadDataArray(buffer.data(), start_pos, reinterpret_cast<T *>(data_ptr), data_byte_size);
+
       }
       assert(start_pos==end_pos);
       m_chunk_file_stream.close();

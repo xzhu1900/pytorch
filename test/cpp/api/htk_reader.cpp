@@ -123,14 +123,20 @@ class HTKChunkDataset : public datasets::ChunkDataSet<
       ChunkSamplerType chunk_sampler,
       ExampleSamplerType example_sampler,
       const string& file_directory,
-      const string& file_set_name)
+      const string& file_set_name,
+      const size_t feature_dimension,
+      const size_t label_dimension,
+      const size_t truncated_length = 0)
       : datasets::ChunkDataSet<
             HTKChunkDataset<ChunkSampler, ExampleSampler>,
             std::vector<Utterance>,
             ChunkSamplerType,
             ExampleSamplerType>(prefetch_count, false),
         chunk_sampler_(std::move(chunk_sampler)),
-        example_sampler_(std::move(example_sampler)) {
+        example_sampler_(std::move(example_sampler),
+        feature_dimension_(feature_dimension),
+        label_dimension_(label_dimension),
+        truncated_length_(truncated_length) {
     my_parser = torch::make_unique<HTKParser>(file_directory, file_set_name);
     num_chunks_ = my_parser->get_chunk_count();
   }
@@ -162,10 +168,73 @@ private:
 
   ChunkSamplerType chunk_sampler_;
   ExampleSamplerType example_sampler_;
+
+  size_t feature_dimension_;
+  size_t label_dimension_;
+  size_t truncated_length_;
 };
 
+void writeFeature(
+    size_t seq_len,
+    size_t feature_dim,
+    std::string output,
+    std::vector<Utterance>& chunk) {
+  assert(chunk.size() == 10);
+
+  ofstream ss;
+  ss.open("/home/xuzhu/data/htk_validation/generated/feature.txt", ios::out | std::ios::ate);
+  ss<<"feature output\n";
+  for(int i=0;i<chunk.size();++i)
+  {
+      ss<<"[ ";
+      for(int j=0;j<seq_len;++j)
+      {
+          ss<<"  [ ";
+          for(int w=0;w<feature_dim;++w)
+          {
+            ss<<chunk[i].feature[j * feature_dim + w]<<", ";
+          }
+          ss<<"]\n";
+
+          std::cout<<"actual element for " <<i<<"'s chunk is "<<chunk[i].feature.size()<<endl;
+      }
+      ss<<"]\n";
+  }
+  ss.close();
+
+
+}
+
+void writeLabel(
+    size_t seq_len,
+    std::string output,
+    std::vector<Utterance>& chunk) {
+
+    assert(chunk.size() == 10);
+
+    ofstream ss;
+    ss.open("/home/xuzhu/data/htk_validation/generated/label.txt", ios::out | std::ios::ate);
+    ss<<"feature output\n";
+    for(int i=0;i<chunk.size();++i)
+    {
+        ss<<"[ ";
+        for(int j=0;j<seq_len;++j)
+        {
+            ss<<chunk[i].label[j]<<", ";
+        }
+        ss<<"]\n";
+    }
+    ss.close();
+
+    }
+
 TEST(DataTest, HTKParser) {
-  HTKParser d("/home/xuzhu/data/perf_converted/", "/home/xuzhu/data/perf_converted/fileSet.json");
+  HTKParser d("/home/xuzhu/data/htk_validation/generated/", "/home/xuzhu/data/htk_validation/generated/fileSet.json");
+
+  auto chunk = d.parse_chunk(0);
+
+  writeFeature(16, 80, "/home/xuzhu/data/htk_validation/generated/feature.txt", chunk);
+  writeLabel(16, "/home/xuzhu/data/htk_validation/generated/label.txt", chunk);
 }
 
 TEST(DataTest, HTKChunkDataset) {
@@ -179,7 +248,9 @@ TEST(DataTest, HTKChunkDataset) {
           samplers::SequentialSampler(0),
           samplers::SequentialSampler(0),
           "/home/xuzhu/data/pytorch_unittest/",
-          "/home/xuzhu/data/pytorch_unittest/fileSet.json");
+          "/home/xuzhu/data/pytorch_unittest/fileSet.json",
+          33,
+          1000);
 
   auto data_loader = torch::data::make_chunk_data_loader(
       dataset, DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
@@ -207,7 +278,9 @@ TEST(DataTest, HTKChunkDatasetVerifyResult) {
           samplers::SequentialSampler(0),
           samplers::SequentialSampler(0),
           "/home/xuzhu/data/converter_output/smalldata/",
-          "/home/xuzhu/data/converter_output/smalldata/fileSet.json");
+          "/home/xuzhu/data/converter_output/smalldata/fileSet.json",
+          33,
+          1000);
 
   auto data_loader = torch::data::make_chunk_data_loader(
       dataset, DataLoaderOptions(batch_size).workers(0).chunk_loading(true));
@@ -281,7 +354,9 @@ TEST(DataTest, HTKChunkDatasetLargeData) {
           samplers::SequentialSampler(0),
           samplers::SequentialSampler(0),
           "/home/xuzhu/data/converter_output/150/",
-          "/home/xuzhu/data/converter_output/150/fileSet_4g.json");
+          "/home/xuzhu/data/converter_output/150/fileSet_4g.json",
+          80,
+          9404);
 
   auto data_loader = torch::data::make_chunk_data_loader(
       dataset, DataLoaderOptions(batch_size).workers(dataloader_worker).chunk_loading(true));
@@ -291,9 +366,15 @@ TEST(DataTest, HTKChunkDatasetLargeData) {
 
   auto iterator = data_loader->begin();
   int iterator_count = ((total_count + batch_size -1)/batch_size);
-  for (size_t i = 0; i < (total_count/batch_size); ++i) {
+  for (size_t i = 0; i < (iterator_count+2); ++i) {
     std::vector<Utterance> batch = *iterator;
     //ASSERT_EQ(batch.size(), batch_size);
+    std::cout << "iteration "<<i<<"with count " << batch.size() << "\n";
+    if(i ==0 || batch.size() == (709))
+    {
+        std::cout << "iteration "<<i<<"with feature "<<batch[0].feature[0]<<" "<<batch[0].feature[1]<<"\n ";
+        std::cout << "iteration "<<i<<"with label "<<batch[0].label[0]<<" "<<batch[0].label[1]<<"\n ";
+    }
     ++iterator;
   }
   auto finish = std::chrono::high_resolution_clock::now();
