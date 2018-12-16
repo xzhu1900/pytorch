@@ -160,10 +160,11 @@ class ChunkDataBuffer {
       return this->total_example_count_in_queue_ < queue_depth_s;
     });
 
+    size_t chunk_size = data.size();
     ChunkData<BatchType, ExampleSampler> chunk_data(
-        index, data.size(), data, example_sampler_);
+        index, chunk_size, std::move(data), example_sampler_);
     chunk_queue_.push(std::move(chunk_data));
-    total_example_count_in_queue_ += data.size();
+    total_example_count_in_queue_ += chunk_size;
     lock.unlock();
     cvr_.notify_all();
   }
@@ -197,7 +198,7 @@ class ChunkDataBuffer {
   std::mutex batch_mutex_;
   std::condition_variable cvr_;
   std::condition_variable cvw_;
-  static const size_t queue_depth_s = 500;
+  static const size_t queue_depth_s = 2048000;
 
   ExampleSampler example_sampler_;
   bool ignore_empty_chunk_ = false;
@@ -327,7 +328,7 @@ class ChunkDataSet : public BatchDataset<Self, Batch, size_t> {
 
         else
         {
-          chunk_buffer_->add_chunk_data(chunk_id, this->read_chunk(chunk_id));
+          chunk_buffer_->add_chunk_data(chunk_id, std::move(data));
         }
       } catch (...) {
         chunk_buffer_->add_chunk_data(chunk_id, std::current_exception());
