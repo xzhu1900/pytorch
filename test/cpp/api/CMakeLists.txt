@@ -64,3 +64,13 @@ if (NOT MSVC)
       -Wno-unused-but-set-parameter)
   endif()
 endif()
+
+# TODO: Temporary target for CTFChunkDataset performance analysis
+#       Tested on Linux and MacOS, only.
+set(TORCH_CTF_TEST_SOURCES
+  ${TORCH_API_TEST_DIR}/data/ctf/ctf_perf.cpp
+)
+add_executable(test_ctf ${TORCH_CTF_TEST_SOURCES})
+target_include_directories(test_ctf PRIVATE ${ATen_CPU_INCLUDE})
+target_link_libraries(test_ctf PRIVATE torch)
+target_compile_options(test_ctf PRIVATE -Wno-maybe-uninitialized -Wno-unused-but-set-parameter)
