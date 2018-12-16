@@ -29,150 +29,149 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
-    {{// |rating 4
+    torch::data::ctf::CTFExample<double> example(seq_id);
+    { // |rating 4
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
-    dataset.features[seq_id].samples.push_back(sample);
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |features 23 35 0 0 0 21 2345 0 0 0 0 0
+      torch::data::ctf::CTFSample<double> sample(
+          seq_id, std::string("features"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(23));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(35));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(21));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2345));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      example.labels.push_back(sample);
+    }
+
+    { // |rating 2
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |features 0 123 0 22 44 44 290 22 22 22 33 0
+      torch::data::ctf::CTFSample<double> sample(
+          seq_id, std::string("features"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(123));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(44));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(44));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(290));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(33));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      example.labels.push_back(sample);
+    }
+
+    { // |rating 1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |features 0 0 0 0 0 0 1 0 0 0 0 0
+      torch::data::ctf::CTFSample<double> sample(
+          seq_id, std::string("features"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      example.labels.push_back(sample);
+    }
+    dataset.examples.push_back(example);
   }
 
   {
-    // |features 23 35 0 0 0 21 2345 0 0 0 0 0
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("features"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(23));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(35));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(21));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(2345));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    dataset.labels[seq_id].samples.push_back(sample);
-  }
-}
-{{// |rating 2
-  torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
-sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
-dataset.features[seq_id].samples.push_back(sample);
-}
+    // 1
+    torch::data::ctf::CTFSequenceID seq_id = 1;
+    torch::data::ctf::CTFExample<double> example(seq_id);
+    { // |rating 1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
+      example.features.push_back(sample);
+    }
 
-{
-  // |features 0 123 0 22 44 44 290 22 22 22 33 0
-  torch::data::ctf::CTFSample<double> sample(seq_id, std::string("features"));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(123));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(44));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(44));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(290));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(33));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  dataset.labels[seq_id].samples.push_back(sample);
-}
-}
-{
-  { // |rating 1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
-    dataset.features[seq_id].samples.push_back(sample);
-  }
+    {
+      // |features 34 56 0 0 0 45 1312 0 0 0 0 0
+      torch::data::ctf::CTFSample<double> sample(
+          seq_id, std::string("features"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(34));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(56));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1312));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      example.labels.push_back(sample);
+    }
 
-  {
-    // |features 0 0 0 0 0 0 1 0 0 0 0 0
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("features"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    dataset.labels[seq_id].samples.push_back(sample);
-  }
-}
-}
-
-{
-  // 1
-  torch::data::ctf::CTFSequenceID seq_id = 1;
-  dataset.features[seq_id].sequence_id = seq_id;
-  dataset.labels[seq_id].sequence_id = seq_id;
-  {{// |rating 1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
-  dataset.features[seq_id].samples.push_back(sample);
-}
-
-{
-  // |features 34 56 0 0 0 45 1312 0 0 0 0 0
-  torch::data::ctf::CTFSample<double> sample(seq_id, std::string("features"));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(34));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(56));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(1312));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-  dataset.labels[seq_id].samples.push_back(sample);
-}
-}
-
-{
-  { // |rating 0
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    dataset.features[seq_id].samples.push_back(sample);
-  }
-
-  {
-    // |features 45 45 0 0 0 12 335 0 0 0 0 0
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("features"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(12));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(335));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-    dataset.labels[seq_id].samples.push_back(sample);
-  }
-}
-}
-
-{
-  // 2
-  torch::data::ctf::CTFSequenceID seq_id = 2;
-  dataset.features[seq_id].sequence_id = seq_id;
-  dataset.labels[seq_id].sequence_id = seq_id;
-  {
     { // |rating 0
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-      dataset.features[seq_id].samples.push_back(sample);
+      example.features.push_back(sample);
+    }
+
+    {
+      // |features 45 45 0 0 0 12 335 0 0 0 0 0
+      torch::data::ctf::CTFSample<double> sample(
+          seq_id, std::string("features"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(12));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(335));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      example.labels.push_back(sample);
+    }
+    dataset.examples.push_back(example);
+  }
+
+  {
+    // 2
+    torch::data::ctf::CTFSequenceID seq_id = 2;
+    torch::data::ctf::CTFExample<double> example(seq_id);
+
+    { // |rating 0
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      example.features.push_back(sample);
     }
 
     {
@@ -191,10 +190,10 @@ dataset.features[seq_id].samples.push_back(sample);
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-      dataset.labels[seq_id].samples.push_back(sample);
+      example.labels.push_back(sample);
     }
+    dataset.examples.push_back(example);
   }
-}
 
-EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
+  EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }

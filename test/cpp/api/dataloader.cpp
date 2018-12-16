@@ -62,10 +62,10 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
 }
 
 struct DummyChunkDatasetBase : public datasets::ChunkDataSet<
-                               DummyChunkDatasetBase,
-                               std::vector<int>,
-                               samplers::SequentialSampler,
-                               samplers::SequentialSampler> {
+                                   DummyChunkDatasetBase,
+                                   std::vector<int>,
+                                   samplers::SequentialSampler,
+                                   samplers::SequentialSampler> {
  public:
   using BatchType = std::vector<int>;
   using ChunkSamplerType = samplers::SequentialSampler;
@@ -793,7 +793,7 @@ TEST(DataTest, CanUseCustomTypeAsIndexType) {
 
   size_t i = 0;
   for (auto batch : *data_loader) {
-    for (int j = 0; j < kBatchSize; ++j) {
+    for (size_t j = 0; j < kBatchSize; ++j) {
       ASSERT_EQ(batch.at(j), 10 + j);
     }
     i += 1;
@@ -1245,14 +1245,18 @@ class LargeDataset : public datasets::ChunkDataSet<
   using BatchRequestType = size_t;
   LargeDataset(size_t num_chunks, size_t batch_size)
       : datasets::ChunkDataSet<
-        LargeDataset,
-        std::vector<int>,
-        samplers::SequentialSampler,
-        samplers::SequentialSampler> (1, false),
+            LargeDataset,
+            std::vector<int>,
+            samplers::SequentialSampler,
+            samplers::SequentialSampler>(1, false),
         num_chunks_(num_chunks),
         batch_size_(batch_size),
-        chunk_sampler_(std::move(samplers::SequentialSampler(num_chunks))),
-        example_sampler_(std::move(samplers::SequentialSampler(batch_size))) {}
+        chunk_sampler_(samplers::SequentialSampler(
+            num_chunks)), // warning: moving a temporary object prevents copy
+                          // elision [-Wpessimizing-move]
+        example_sampler_(samplers::SequentialSampler(batch_size)) {
+  } // warning: moving a temporary object prevents copy elision
+    // [-Wpessimizing-move]
 
   std::vector<int> read_chunk(size_t chunk_index) override {
     std::vector<int> batch(batch_size_);
@@ -1331,8 +1335,12 @@ TEST(DataTest, DataLoaderWithChunkSupportMultiWorkers) {
   }
 }
 
-/// ctf_sample4.ctf has 2 chunks with 5 (3+2) examples
+/// ctf_sample_part_of_speech_tagging.ctf has 2 batches with 1 example each
 TEST(DataTest, CTFDataLoaderWithChunkSupportSingleWorkerSingleChunk) {
+  const size_t batch_size = 1;
+  const size_t total_workers = 1;
+  const size_t total_example = 2;
+  const size_t max_jobs = 2 * total_workers;
   torch::data::ctf::CTFStreamDefinitions stream_defs;
   stream_defs["features"].emplace_back(
       "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
@@ -1354,29 +1362,39 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportSingleWorkerSingleChunk) {
           samplers::RandomSampler,
           samplers::RandomSampler>>(config);
   auto data_loader = torch::data::make_chunk_data_loader(
-      shared_dataset, DataLoaderOptions().batch_size(1).chunk_loading(true).workers(1));
+      shared_dataset,
+      DataLoaderOptions()
+          .batch_size(batch_size)
+          .chunk_loading(true)
+          .workers(total_workers)
+          .max_jobs(max_jobs));
 
   shared_dataset->reset();
   auto iterator = data_loader->begin();
-  for (size_t i = 0; i < 2; ++i, ++iterator) {
-    std::vector<Example<
-        std::vector<ctf::CTFSample<double>>,
-        std::vector<ctf::CTFSample<double>>>>
-        batch = *iterator;
-    ASSERT_EQ(batch.size(), 1);
-    ASSERT_EQ(batch[0].data[0].input_name, "word");
-    ASSERT_EQ(batch[0].target[0].input_name, "tag");
+  size_t count_example = 0;
+  // TODO: Because current DataLoader can return empty batches,
+  // batch max_jobs to ensure chunk is fully read.
+  // Empty batches are ignored by the tests
+  for (size_t i = 0; i < max_jobs; ++i, ++iterator) {
+    std::vector<ctf::CTFExample<double>> batch = *iterator;
+    if (batch.size() != 0) {
+      count_example += batch.size();
+      ASSERT_EQ(batch.size(), batch_size);
+      ASSERT_EQ(batch[0].features[0].input_name, "word");
+      ASSERT_EQ(batch[0].labels[0].input_name, "tag");
+    }
   }
+  ASSERT_EQ(total_example, count_example);
 }
 
+// ctf_sample_part_of_speech_tagging.ctf has a single batch with 2 examples
 TEST(
     DataTest,
-    CTFDataLoaderWithChunkSupportSingleWorkerSingleChunkSample4TwoExamplePerBatch) {
+    CTFDataLoaderWithChunkSupportSingleWorkerSingleChunkTwoExamplePerBatch) {
   const size_t batch_size = 2;
-  const size_t total_example = 5;
-  const size_t total_prefetch = 1;
+  const size_t total_example = 2;
   const size_t total_worker = 1;
-  const size_t total_batch = 1 + ((total_example - 1) / batch_size);
+  const size_t max_jobs = 2 * total_worker;
   torch::data::ctf::CTFStreamDefinitions stream_defs;
   stream_defs["features"].emplace_back(
       "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
@@ -1401,28 +1419,36 @@ TEST(
       shared_dataset,
       DataLoaderOptions()
           .workers(total_worker)
+          .max_jobs(max_jobs)
           .batch_size(batch_size)
           .chunk_loading(true));
 
   shared_dataset->reset();
   auto iterator = data_loader->begin();
-  std::vector<Example<
-      std::vector<ctf::CTFSample<double>>,
-      std::vector<ctf::CTFSample<double>>>>
-      batch = *iterator;
-  ASSERT_EQ(batch.size(), batch_size);
-  for (size_t i = 0; i < 2; ++i, ++iterator) {
-    ASSERT_EQ(batch[i].data[0].input_name, "word");
-    ASSERT_EQ(batch[i].target[0].input_name, "tag");
+  size_t count_example = 0;
+  // TODO: Because current DataLoader can return empty batches,
+  // batch max_jobs to ensure chunk is fully read.
+  // Empty batches are ignored by the tests
+  for (size_t i = 0; i < max_jobs; ++i, ++iterator) {
+    std::vector<ctf::CTFExample<double>> batch = *iterator;
+    if (batch.size() != 0) {
+      ASSERT_EQ(batch.size(), batch_size);
+      ASSERT_EQ(batch[i].features[0].input_name, "word");
+      ASSERT_EQ(batch[i].labels[0].input_name, "tag");
+      count_example += batch.size();
+    }
   }
+  ASSERT_EQ(total_example, count_example);
 }
 
+// ctf_sample_multiple_chunks_0000[0...6].ctf has 7 chunks with 3 batches each
+// (last chunk has 1 batch) and one example per batch
 TEST(DataTest, CTFDataLoaderWithChunkSupportMultipleWorkersMultipleChunks) {
   const size_t batch_size = 3;
   const size_t total_example = 7;
   const size_t total_prefetch = 2;
   const size_t total_worker = 10;
-  const size_t total_batch = 1 + ((total_example - 1) / batch_size);
+  const size_t max_jobs = 2 * total_worker;
 
   std::vector<torch::data::ctf::CTFConfigHelper> configs;
   torch::data::ctf::CTFStreamDefinitions stream_defs;
@@ -1431,7 +1457,7 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportMultipleWorkersMultipleChunks) {
   stream_defs["labels"].emplace_back(
       "tag", "tag", 0, torch::data::ctf::CTFValueFormat::Sparse);
 
-  for (auto i = 0; i < total_example; ++i) {
+  for (size_t i = 0; i < total_example; ++i) {
     torch::data::ctf::CTFConfigHelper config(
         std::string(
             torch::data::ctf::CTF_SAMPLE_DIR +
@@ -1454,23 +1480,22 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportMultipleWorkersMultipleChunks) {
       shared_dataset,
       DataLoaderOptions()
           .workers(total_worker)
+          .max_jobs(max_jobs)
           .batch_size(batch_size)
           .chunk_loading(true));
 
   shared_dataset->reset();
-  auto it = data_loader->begin();
+  auto iterator = data_loader->begin();
   size_t count_example = 0;
-  // TODO: As current DataLoader can return empty batches,
-  // run 2*total_worker to ensure all batches are read
-  for (size_t c = 0; c < 2 * total_worker; ++c, ++it) {
-    std::vector<Example<
-        std::vector<ctf::CTFSample<double>>,
-        std::vector<ctf::CTFSample<double>>>>
-        batch = *it;
+  // TODO: Because current DataLoader can return empty batches,
+  // batch max_jobs to ensure chunk is fully read.
+  // Empty batches are ignored by the tests
+  for (size_t i = 0; i < max_jobs; ++i, ++iterator) {
+    std::vector<ctf::CTFExample<double>> batch = *iterator;
     count_example += batch.size();
     for (size_t b = 0; b < batch.size(); ++b) {
-      ASSERT_EQ(batch[b].data[0].input_name, "word");
-      ASSERT_EQ(batch[b].target[0].input_name, "tag");
+      ASSERT_EQ(batch[b].features[0].input_name, "word");
+      ASSERT_EQ(batch[b].labels[0].input_name, "tag");
     }
   }
   ASSERT_EQ(total_example, count_example);

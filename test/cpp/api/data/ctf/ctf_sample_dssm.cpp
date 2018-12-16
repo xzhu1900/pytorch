@@ -25,59 +25,52 @@ TEST(DataTest, CTF_SAMPLE_DSSM_SUCCESS) {
   torch::data::ctf::CTFDataset<double> dataset(
       torch::data::ctf::CTFDataType::Double);
   {
+    // 0 (implicit)
+    torch::data::ctf::CTFSequenceID seq_id = 0;
+    torch::data::ctf::CTFExample<double> example(seq_id);
+    {
+      // |src 12:1 23:1 345:2 45001:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 23));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2, 345));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 45001));
+      example.features.push_back(sample);
+    }
+    {
+      // |tgt 233:1 766:2 234:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tgt"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 233));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2, 766));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
+      example.labels.push_back(sample);
+    }
+    dataset.examples.push_back(example);
+  }
+  {
     // 1 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
+    torch::data::ctf::CTFExample<double> example(seq_id);
     {
-      {
-        // |src 12:1 23:1 345:2 45001:1
-        torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 23));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(2, 345));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 45001));
-        dataset.features[seq_id].samples.push_back(sample);
-      }
-
-      {
-        // |tgt 233:1 766:2 234:1
-        torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tgt"));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 233));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(2, 766));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
-        dataset.labels[seq_id].samples.push_back(sample);
-      }
+      // |src 123:1 56:1 10324:1 18001:3
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 56));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10324));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(3, 18001));
+      example.features.push_back(sample);
     }
-  }
-
-  {
-    // 2 (implicit)
-    torch::data::ctf::CTFSequenceID seq_id = 2;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
     {
-      {
-        // |src 123:1 56:1 10324:1 18001:3
-        torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 56));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10324));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(3, 18001));
-        dataset.features[seq_id].samples.push_back(sample);
-      }
-
-      {
-        // |tgt 233:1 2344:2 8889:1 2234:1 253434:1
-        torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tgt"));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 233));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(2, 2344));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 8889));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 2234));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 253434));
-        dataset.labels[seq_id].samples.push_back(sample);
-      }
+      // |tgt 233:1 2344:2 8889:1 2234:1 253434:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tgt"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 233));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2, 2344));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 8889));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 2234));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 253434));
+      example.labels.push_back(sample);
     }
+    dataset.examples.push_back(example);
   }
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);

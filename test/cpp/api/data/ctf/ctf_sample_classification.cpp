@@ -26,55 +26,50 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   torch::data::ctf::CTFDataset<double> dataset(
       torch::data::ctf::CTFDataType::Double);
   {
-    // 1 (implicit)
-    torch::data::ctf::CTFSequenceID seq_id = 1;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
-    {
-      {
-        { // |class 23:1
-          torch::data::ctf::CTFSample<double> sample(
-              seq_id, std::string("class"));
-          sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 23));
-          dataset.labels[seq_id].samples.push_back(sample);
-        }
-        // |features 2 3 4 5 6
-        torch::data::ctf::CTFSample<double> sample(
-            seq_id, std::string("features"));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(5));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(6));
-        dataset.features[seq_id].samples.push_back(std::move(sample));
-      }
+    // 0 (implicit)
+    torch::data::ctf::CTFSequenceID seq_id = 0;
+    torch::data::ctf::CTFExample<double> example(seq_id);
+
+    { // |class 23:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 23));
+      example.labels.push_back(sample);
     }
+    { // |features 2 3 4 5 6
+      torch::data::ctf::CTFSample<double> sample(
+          seq_id, std::string("features"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(5));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(6));
+      example.features.push_back(sample);
+    }
+    dataset.examples.push_back(example);
   }
 
   {
-    // 2 (implicit)
-    torch::data::ctf::CTFSequenceID seq_id = 2;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
-    {
-      { // |class 13:1
-        torch::data::ctf::CTFSample<double> sample(
-            seq_id, std::string("class"));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 13));
-        dataset.labels[seq_id].samples.push_back(sample);
-      }
-      {
-        // |features 2 3 4 5 6
-        torch::data::ctf::CTFSample<double> sample(
-            seq_id, std::string("features"));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
-        sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
-        dataset.features[seq_id].samples.push_back(sample);
-      }
+    // 1 (implicit)
+    torch::data::ctf::CTFSequenceID seq_id = 1;
+    torch::data::ctf::CTFExample<double> example(seq_id);
+
+    { // |class 13:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 13));
+      example.labels.push_back(sample);
     }
+    {
+      // |features 2 3 4 5 6
+      torch::data::ctf::CTFSample<double> sample(
+          seq_id, std::string("features"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
+      example.features.push_back(sample);
+    }
+    dataset.examples.push_back(example);
   }
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);

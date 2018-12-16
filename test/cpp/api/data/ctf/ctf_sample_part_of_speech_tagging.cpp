@@ -29,87 +29,82 @@ TEST(DataTest, CTF_SAMPLE_PART_OF_SPEECH_TAGGING_SUCCESS) {
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
-    {{// |word 234:1
+    torch::data::ctf::CTFExample<double> example(seq_id);
+    { // |word 234:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
-    dataset.features[seq_id].samples.push_back(sample);
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |tag 12:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
+      example.labels.push_back(sample);
+    }
+
+    { // |word 123:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |tag 10:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10));
+      example.labels.push_back(sample);
+    }
+
+    {
+      // |word 123:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |tag 13:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 13));
+      example.labels.push_back(sample);
+    }
+    dataset.examples.push_back(example);
   }
 
   {
-    // |tag 12:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
-    dataset.labels[seq_id].samples.push_back(sample);
+    // 1
+    torch::data::ctf::CTFSequenceID seq_id = 1;
+    torch::data::ctf::CTFExample<double> example(seq_id);
+    { // |word 234:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |tag 12:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
+      example.labels.push_back(sample);
+    }
+
+    {
+      // |word 123:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |tag 10:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10));
+      example.labels.push_back(sample);
+    }
+    dataset.examples.push_back(example);
   }
-}
-{{// |word 123:1
-  torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
-sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
-dataset.features[seq_id].samples.push_back(sample);
-}
-
-{
-  // |tag 10:1
-  torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10));
-  dataset.labels[seq_id].samples.push_back(sample);
-}
-}
-{
-  {
-    // |word 123:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
-    dataset.features[seq_id].samples.push_back(sample);
-  }
-
-  {
-    // |tag 13:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 13));
-    dataset.labels[seq_id].samples.push_back(sample);
-  }
-}
-}
-
-{
-  // 1
-  torch::data::ctf::CTFSequenceID seq_id = 1;
-  dataset.features[seq_id].sequence_id = seq_id;
-  dataset.labels[seq_id].sequence_id = seq_id;
-  {{// |word 234:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
-  dataset.features[seq_id].samples.push_back(sample);
-}
-
-{
-  // |tag 12:1
-  torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
-  sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
-  dataset.labels[seq_id].samples.push_back(sample);
-}
-}
-
-{
-  {
-    // |word 123:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
-    dataset.features[seq_id].samples.push_back(sample);
-  }
-
-  {
-    // |tag 10:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10));
-    dataset.labels[seq_id].samples.push_back(sample);
-  }
-}
-}
-EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
+  EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
 
 TEST(DataTest, CTF_SAMPLE_PART_OF_SPEECH_TAGGING_WITH_SEEK_SUCCESS) {
@@ -135,38 +130,35 @@ TEST(DataTest, CTF_SAMPLE_PART_OF_SPEECH_TAGGING_WITH_SEEK_SUCCESS) {
   {
     // 1
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
-    {{// |word 234:1
+    torch::data::ctf::CTFExample<double> example(seq_id);
+    { // |word 234:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
-    dataset.features[seq_id].samples.push_back(sample);
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |tag 12:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
+      example.labels.push_back(sample);
+    }
+
+    {
+      // |word 123:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
+      example.features.push_back(sample);
+    }
+
+    {
+      // |tag 10:1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
+      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10));
+      example.labels.push_back(sample);
+    }
+    dataset.examples.push_back(example);
   }
 
-  {
-    // |tag 12:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 12));
-    dataset.labels[seq_id].samples.push_back(sample);
-  }
-}
-
-{
-  {
-    // |word 123:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
-    dataset.features[seq_id].samples.push_back(sample);
-  }
-
-  {
-    // |tag 10:1
-    torch::data::ctf::CTFSample<double> sample(seq_id, std::string("tag"));
-    sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 10));
-    dataset.labels[seq_id].samples.push_back(sample);
-  }
-}
-}
-
-EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
+  EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }

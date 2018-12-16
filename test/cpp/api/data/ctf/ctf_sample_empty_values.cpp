@@ -30,34 +30,33 @@ TEST(DataTest, CTF_SAMPLE_EMPTY_VALUES_SUCCESS) {
   {
     // 1
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    dataset.features[seq_id].sequence_id = seq_id;
-    {
-      { // |F0
-        torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
-        dataset.features[seq_id].samples.push_back(sample);
-      }
+    torch::data::ctf::CTFExample<double> example(seq_id);
+
+    { // |F0
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
+      example.features.push_back(sample);
     }
+    dataset.examples.push_back(example);
   }
 
   {
     // 2
     torch::data::ctf::CTFSequenceID seq_id = 2;
-    dataset.features[seq_id].sequence_id = seq_id;
-    dataset.labels[seq_id].sequence_id = seq_id;
-    {
-      { // |F0
-        torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
-        dataset.features[seq_id].samples.push_back(sample);
-      }
-      { // |F1
-        torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F1"));
-        dataset.features[seq_id].samples.push_back(sample);
-      }
-      { // |F2
-        torch::data::ctf::CTFSample<double> sample(seq_id, "F2");
-        dataset.labels[seq_id].samples.push_back(sample);
-      }
+    torch::data::ctf::CTFExample<double> example(seq_id);
+
+    { // |F0
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
+      example.features.push_back(sample);
     }
+    { // |F1
+      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F1"));
+      example.features.push_back(sample);
+    }
+    { // |F2
+      torch::data::ctf::CTFSample<double> sample(seq_id, "F2");
+      example.labels.push_back(sample);
+    }
+    dataset.examples.push_back(example);
   }
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);

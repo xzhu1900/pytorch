@@ -17,6 +17,7 @@ namespace torch {
 namespace data {
 namespace ctf {
 
+// #define CTF_DEBUG
 /*
  * CTF general format
  * [Sequence_Id](Sample or Comment)+
@@ -118,7 +119,7 @@ static const std::string ctf_value_type_str[] =
 static const std::string CTF_STREAM_DEFINITION_FEATURES("features");
 static const std::string CTF_STREAM_DEFINITION_LABELS("labels");
 
-typedef size_t CTFSequenceID;
+typedef long int CTFSequenceID;
 typedef std::string CTFName;
 typedef std::string CTFComment;
 typedef size_t CTFValueIndex;
@@ -153,123 +154,65 @@ struct CTFSample {
         input_name(std::move(input_name)),
         values(std::move(values)) {}
 
-  CTFSequenceID sequence_id;
-  std::string input_name;
-  std::vector<CTFValue<DataType>> values;
   bool operator==(const CTFSample& rhs) const {
     return (
         this->input_name == rhs.input_name &&
+        this->sequence_id == rhs.sequence_id &&
         std::equal(
             this->values.begin(), this->values.end(), rhs.values.begin()));
   }
-
-  // Copy constructor
-  CTFSample(const CTFSample& a)
-      : sequence_id(a.sequence_id), input_name(a.input_name), values(a.values) {
-    // std::cout << "CTFSample copy ctor" << std::endl;
-  }
-
-  // Copy assignment
-  CTFSample& operator=(const CTFSample& a) {
-    // Self-assignment detection
-    if (&a == this)
-      return *this;
-
-    // Copy
-    sequence_id = a.sequence_id;
-    input_name = a.input_name;
-    values = a.values;
-    // std::cout << "CTFSample copy assignment" << std::endl;
-
-    return *this;
-  }
-
-  // Move constructor
-  CTFSample(CTFSample&& a)
-      : sequence_id(a.sequence_id),
-        input_name(std::move(a.input_name)),
-        values(std::move(a.values)) {
-    // Clean old reference
-    a.sequence_id = 0;
-    a.input_name = std::string();
-    a.values = std::vector<torch::data::ctf::CTFValue<DataType>>();
-    // std::cout << "CTFSample MOVE ctor" << std::endl;
-  }
-
-  // Move assignment
-  CTFSample& operator=(CTFSample&& a) {
-    // Self-assignment detection
-    if (&a == this)
-      return *this;
-
-    // Transfer ownership
-    sequence_id = a.sequence_id;
-    input_name = std::move(a.input_name);
-    values = std::move(a.values);
-
-    // Clean old reference
-    a.sequence_id = 0;
-    a.input_name = std::string();
-    a.values = std::vector<torch::data::ctf::CTFValue<DataType>>();
-
-    // std::cout << "CTFSample MOVE =" << std::endl;
-    return *this;
-  }
+  CTFSequenceID sequence_id;
+  std::string input_name;
+  std::vector<CTFValue<DataType>> values;
 };
 
 template <typename DataType>
-struct CTFSequence {
-  explicit CTFSequence(){};
-  explicit CTFSequence(CTFSequenceID sequence_id) : sequence_id(sequence_id) {}
-  explicit CTFSequence(
-      CTFSequenceID sequence_id,
-      std::vector<CTFSample<DataType>>& samples)
-      : sequence_id(sequence_id), samples(std::move(samples)) {}
-#ifdef CTF_COMMENT
-  explicit CTFSequence(CTFSequenceID sequence_id, CTFComment comment)
-      : sequence_id(sequence_id), comment(std::move(comment)) {}
-  explicit CTFSequence(
-      CTFSequenceID sequence_id,
-      std::vector<CTFSample<DataType>>& samples,
-      CTFComment& comment)
-      : sequence_id(sequence_id),
-        samples(std::move(samples)),
-        comment(std::move(comment)) {}
-  CTFComment comment;
-#endif
-
-  CTFSequenceID sequence_id;
-  std::vector<CTFSample<DataType>> samples;
-  bool operator==(const CTFSequence<DataType>& rhs) const {
+struct CTFExample {
+  CTFExample() : sequence_id(0) {
+    features.clear();
+    labels.clear();
+  }
+  CTFExample(CTFSequenceID id) : sequence_id(id) {
+    features.clear();
+    labels.clear();
+  }
+  bool operator==(const CTFExample<DataType>& rhs) const {
     return (
         this->sequence_id == rhs.sequence_id &&
-        this->samples.size() == rhs.samples.size() &&
-        std::equal(
-            this->samples.begin(), this->samples.end(), rhs.samples.begin()));
-  }
-};
-
-template <typename DataType>
-struct CTFDataset {
-  explicit CTFDataset(CTFDataType type) : type(type) {}
-
-  CTFDataType type;
-  std::unordered_map<CTFSequenceID, CTFSequence<DataType>> features;
-  std::unordered_map<CTFSequenceID, CTFSequence<DataType>> labels;
-  bool operator==(const CTFDataset<DataType>& rhs) const {
-    return (
         this->features.size() == rhs.features.size() &&
         this->labels.size() == rhs.labels.size() &&
         std::equal(
             this->features.begin(),
             this->features.end(),
             rhs.features.begin()) &&
-        std::equal(this->labels.begin(), this->labels.end(), rhs.labels.begin())
-
-    );
+        std::equal(
+            this->labels.begin(), this->labels.end(), rhs.labels.begin()));
 
     return true;
   }
+
+  size_t sequence_id;
+  std::vector<CTFSample<DataType>> features;
+  std::vector<CTFSample<DataType>> labels;
+};
+
+template <typename DataType>
+struct CTFDataset {
+  explicit CTFDataset(CTFDataType type) : type(type) {}
+
+  bool operator==(const CTFDataset<DataType>& rhs) const {
+    return (
+        this->examples.size() == rhs.examples.size() &&
+        std::equal(
+            this->examples.begin(),
+            this->examples.end(),
+            rhs.examples.begin()));
+
+    return true;
+  }
+
+  CTFDataType type;
+  std::vector<CTFExample<DataType>> examples;
 };
 
 template <typename DataType>
@@ -317,32 +260,29 @@ std::ostream& operator<<(
 #endif
   return os;
 }
+
 template <typename DataType>
 std::ostream& operator<<(
     std::ostream& os,
-    const CTFSequence<DataType>& ctf_sequence) {
+    const CTFExample<DataType>& ctf_example) {
 #ifdef CTF_DEBUG
-  os << "Sequence ID: " << ctf_sequence.sequence_id << std::endl;
-#ifdef CTF_COMMENT
-  if (!ctf_sequence.comment.empty()) {
-    os << "Comment: " << ctf_sequence.comment << std::endl;
+  os << "Sequence ID: " << ctf_example.sequence_id << std::endl;
+  os << "Features: " << std::endl;
+  for (const auto& feature : ctf_example.features) {
+    os << feature << std::endl;
   }
-#endif
-  for (auto it = ctf_sequence.samples.begin(); it != ctf_sequence.samples.end();
-       ++it) {
-    os << *it;
+  os << "Labels: " << std::endl;
+  for (const auto& label : ctf_example.labels) {
+    os << label << std::endl;
   }
 #else
-  os << std::endl << ctf_sequence.sequence_id << " ";
-  for (auto it = ctf_sequence.samples.begin(); it != ctf_sequence.samples.end();
-       ++it) {
-    os << *it;
+  os << std::endl << ctf_example.sequence_id << " ";
+  for (const auto& feature : ctf_example.features) {
+    os << feature << std::endl;
   }
-#ifdef CTF_COMMENT
-  if (!ctf_sequence.comment.empty()) {
-    os << " |#" << ctf_sequence.comment;
+  for (const auto& label : ctf_example.labels) {
+    os << label << std::endl;
   }
-#endif
 #endif
   return os;
 }
@@ -351,23 +291,8 @@ template <typename DataType>
 std::ostream& operator<<(
     std::ostream& os,
     const CTFDataset<DataType>& ctf_dataset) {
-  std::vector<typename std::unordered_map<
-      CTFSequenceID,
-      CTFSequence<DataType>>::const_iterator>
-      samples_begin;
-  std::vector<typename std::unordered_map<
-      CTFSequenceID,
-      CTFSequence<DataType>>::const_iterator>
-      samples_end;
-  samples_begin.push_back(ctf_dataset.features.begin());
-  samples_end.push_back(ctf_dataset.features.end());
-  samples_begin.push_back(ctf_dataset.labels.begin());
-  samples_end.push_back(ctf_dataset.labels.end());
-
-  for (auto i = 0; i < 2; ++i) {
-    for (auto it = samples_begin[i]; it != samples_end[i]; ++it) {
-      os << it->second;
-    }
+  for (const auto& example : ctf_dataset.examples) {
+    os << example;
   }
 
   return os;
@@ -396,9 +321,6 @@ class CTFParser {
       throw std::runtime_error(error_msg);
     }
   }
-  virtual ~CTFParser() {
-    buffer_.clear();
-  }
 
   void read_from_file(void) {
     read_from_file_(-1);
@@ -408,48 +330,40 @@ class CTFParser {
   }
 
   void print_data(void) const {
-    std::vector<typename std::unordered_map<
-        CTFSequenceID,
-        CTFSequence<DataType>>::const_iterator>
-        samples_begin;
-
-    std::vector<typename std::unordered_map<
-        CTFSequenceID,
-        CTFSequence<DataType>>::const_iterator>
-        samples_end;
-
-    samples_begin.push_back(dataset_->features.begin());
-    samples_end.push_back(dataset_->features.end());
-    samples_begin.push_back(dataset_->labels.begin());
-    samples_end.push_back(dataset_->labels.end());
-
-    for (auto i = 0; i < 2; ++i) {
-      for (auto it_features = samples_begin[i]; it_features != samples_end[i];
-           ++it_features) {
-        std::cout << it_features->second.sequence_id;
-#ifdef CTF_COMMENT
-        if (!it_features->second.comment.empty()) {
-          std::cout << " |#" << it_features->second.comment;
-        }
-#endif
-        std::cout << std::endl;
-        for (const auto& sample : it_features->second.samples) {
-          std::cout << " |" << sample.input_name << " ";
-          if (sample.values.empty()) {
-            std::cout << "<null optional value>";
-          } else {
-            for (const auto& value : sample.values) {
-              if (value.index != SIZE_MAX) {
-                std::cout << value.index << ":";
-              }
-              std::cout << value.value << " ";
+    std::cout << "Examples: " << dataset_->examples.size() << std::endl;
+    for (const auto& example : dataset_->examples) {
+      std::cout << example.sequence_id << " ";
+      for (const auto& sample : example.features) {
+        std::cout << " |" << sample.input_name << "(F)";
+        if (sample.values.empty()) {
+          std::cout << " <null optional value>";
+        } else {
+          for (const auto& value : sample.values) {
+            if (value.index != SIZE_MAX) {
+              std::cout << value.index << ":";
             }
+            std::cout << " " << value.value;
           }
-          std::cout << std::endl;
         }
       }
+
+      for (const auto& sample : example.labels) {
+        std::cout << " |" << sample.input_name << "(L)";
+        if (sample.values.empty()) {
+          std::cout << " <null optional value>";
+        } else {
+          for (const auto& value : sample.values) {
+            if (value.index != SIZE_MAX) {
+              std::cout << value.index << ":";
+            }
+            std::cout << " " << value.value;
+          }
+        }
+      }
+      std::cout << std::endl;
     }
   }
+
   std::shared_ptr<CTFDataset<DataType>> get_dataset() {
     return dataset_;
   }
@@ -473,8 +387,6 @@ class CTFParser {
     while (is_digit(buffer_[runner])) {
       ++runner;
     }
-    // Store the final index of the sequence id string
-    size_t end_seq_id = runner;
 
     // Discard delimiters after the ID
     while (is_value_delimiter(buffer_[runner])) {
@@ -704,24 +616,12 @@ class CTFParser {
       ++runner;
     }
 
-#ifdef CTF_COMMENT
-    // Return the CTF Comment
-    comment =
-        std::string(buffer_.data() + beg_comment, end_comment - beg_comment);
-#ifdef CTF_DEBUG
-    std::cout << "Found CTF Comment '" << comment << "' at index "
-              << buffer_pos_ << std::endl;
-#endif
-    buffer_pos_ = runner;
-    return true;
-#else
 #ifdef CTF_DEBUG
     std::cout << "Skipping CTF Comment at index " << buffer_pos_ << std::endl;
 #endif
     buffer_pos_ = runner;
     comment = std::string();
     return true;
-#endif
   }
 
   bool get_values(
@@ -738,7 +638,7 @@ class CTFParser {
                   << std::endl;
 #endif
       }
-      values.push_back(std::move(value));
+      values.emplace_back(std::move(value));
     }
 
     // Remove EOL
@@ -806,8 +706,9 @@ class CTFParser {
 #ifdef CTF_DEBUG
     size_t read_count = 0;
 #endif
+    CTFExample<DataType> example;
     CTFSequenceID sequence_id;
-    CTFSequenceID previous_sequence_id = 0;
+    CTFSequenceID previous_sequence_id = -1;
     bool has_initial_sequence_id = false;
     if (offset >= 0) {
       reader_->seek(offset);
@@ -836,25 +737,32 @@ class CTFParser {
                     << ")" << std::endl;
 #endif
         } else {
-          sequence_id = ++previous_sequence_id;
-#ifdef CTF_DEBUG
-          std::cout << "Incrementing previous Sequence ID ("
+          sequence_id = previous_sequence_id + 1;
+          #ifdef CTF_DEBUG
+          std::cout << "Using incremented previous Sequence ID ("
                     << previous_sequence_id << ")" << std::endl;
-#endif
+          #endif
         }
       } else {
         has_initial_sequence_id = true;
       }
 
-      bool is_new = (previous_sequence_id == sequence_id);
+      bool is_new =
+          (previous_sequence_id != sequence_id && sequence_id != LONG_MAX);
+      if (is_new &&
+          (example.features.size() > 0 || example.labels.size() > 0)) {
+        dataset_->examples.emplace_back(std::move(example));
+        example.features.clear();
+        example.labels.clear();
+      }
       previous_sequence_id = sequence_id;
-
       while (buffer_pos_ < len) {
         // After the sequence ID, there can be many samples/comments
         CTFComment comment;
         CTFSample<DataType> sample;
         if (!get_sample(sample, sequence_id)) {
           if (!get_comment(comment)) {
+            dataset_->examples.clear();
             std::string error_msg(
                 "Invalid CTF File. Neither a CTF Value nor a "
                 "CTF Comment was found at index " +
@@ -862,26 +770,10 @@ class CTFParser {
 #ifdef CTF_DEBUG
             std::cout << error_msg << buffer_pos_ << std::endl;
 #endif
-            dataset_->features.clear();
-            dataset_->labels.clear();
             throw std::runtime_error(error_msg);
-          } else {
-#ifdef CTF_COMMENT
-            // Line starts with a comment
-            // Each sequence has a single comment, so the last comment
-            // override the previous ones
-
-            dataset_->features[sequence_id].sequence_id = sequence_id;
-            dataset_->labels[sequence_id].sequence_id = sequence_id;
-            if (!comment.empty()) {
-              dataset_->features[sequence_id].comment = std::move(comment);
-            }
-
-#endif
           }
         }
         // Appends a new sample to the dataset
-        std::vector<CTFStreamInformation>::const_iterator it_stream;
         if (!sample.input_name.empty()) {
           std::vector<CTFStreamInformation>::const_iterator it_stream =
               std::find(
@@ -889,28 +781,18 @@ class CTFParser {
                   stream_defs_[CTF_STREAM_DEFINITION_FEATURES].end(),
                   CTFStreamInformation(sample.input_name));
           if (it_stream != stream_defs_[CTF_STREAM_DEFINITION_FEATURES].end()) {
-            dataset_->features[sequence_id].sequence_id = sequence_id;
-            dataset_->features[sequence_id].samples.push_back(
-                std::move(sample));
+            example.sequence_id = sequence_id;
+            example.features.emplace_back(std::move(sample));
           } else {
-            dataset_->labels[sequence_id].sequence_id = sequence_id;
-            dataset_->labels[sequence_id].samples.push_back(std::move(sample));
+            example.sequence_id = sequence_id;
+            example.labels.emplace_back(std::move(sample));
           }
         }
-#ifdef CTF_COMMENT
-        // Updates the comment for the sequence. Previous comments are
-        // overwritten
-        if (!comment.empty()) {
-          if (it_stream != stream_defs_[CTF_STREAM_DEFINITION_FEATURES].end()) {
-            dataset_->features[sequence_id].comment = std::move(comment);
-          } else {
-            dataset_->labels[sequence_id].comment = std::move(comment);
-          }
-        }
-#endif
       }
     }
+    dataset_->examples.emplace_back(std::move(example));
   }
+  // DISALLOW_COPY_AND_ASSIGN(CTFParser<DataType>);
 
   CTFStreamDefinitions stream_defs_;
   CTFDataType element_type_;
