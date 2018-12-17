@@ -30,7 +30,7 @@ TEST(DataTest, CTF_SAMPLE_EMPTY_VALUES_SUCCESS) {
   {
     // 1
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
 
     { // |F0
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
@@ -42,7 +42,7 @@ TEST(DataTest, CTF_SAMPLE_EMPTY_VALUES_SUCCESS) {
   {
     // 2
     torch::data::ctf::CTFSequenceID seq_id = 2;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
 
     { // |F0
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));

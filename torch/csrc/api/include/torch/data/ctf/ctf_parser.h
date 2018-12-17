@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <algorithm>
 #include <cassert>
+#include <climits>
 #include <iostream>
 #include <memory>
 #include <ostream>
@@ -63,7 +64,8 @@ struct CTFStreamInformation {
   std::string name; // Unique name of the stream
   std::string alias; // sample name prefix used in the input data
   size_t dimension; // expected number of elements in a sample
-                    // (can be omitted for sparse input)
+                    // (can be omitted for sparse input,, but causes a
+                    // significant performance hit)
   CTFValueFormat format; // Storage format of the stream
 
   CTFStreamInformation(std::string name) : name(name){};
@@ -168,14 +170,21 @@ struct CTFSample {
 
 template <typename DataType>
 struct CTFExample {
-  CTFExample() : sequence_id(0) {
+  CTFExample() = delete;
+  CTFExample(CTFStreamDefinitions stream_defs) : sequence_id(0) {
     features.clear();
     labels.clear();
+    features.reserve(stream_defs["features"].size());
+    labels.reserve(stream_defs["labels"].size());
   }
-  CTFExample(CTFSequenceID id) : sequence_id(id) {
+  CTFExample(CTFSequenceID id, CTFStreamDefinitions stream_defs)
+      : sequence_id(id) {
     features.clear();
     labels.clear();
+    features.reserve(stream_defs["features"].size());
+    labels.reserve(stream_defs["labels"].size());
   }
+
   bool operator==(const CTFExample<DataType>& rhs) const {
     return (
         this->sequence_id == rhs.sequence_id &&
@@ -199,6 +208,9 @@ struct CTFExample {
 template <typename DataType>
 struct CTFDataset {
   explicit CTFDataset(CTFDataType type) : type(type) {}
+  explicit CTFDataset(CTFDataType type, size_t total_examples) : type(type) {
+    examples.reserve(total_examples);
+  }
 
   bool operator==(const CTFDataset<DataType>& rhs) const {
     return (
@@ -626,7 +638,11 @@ class CTFParser {
 
   bool get_values(
       std::vector<CTFValue<DataType>>& values,
-      CTFValueFormat format) {
+      CTFValueFormat format,
+      size_t dimension) {
+    if (dimension > 0) {
+      values.reserve(dimension);
+    }
     while (!is_name_prefix(buffer_[buffer_pos_]) &&
            !is_comment_prefix(buffer_[buffer_pos_]) &&
            !is_eol(buffer_[buffer_pos_]) &&
@@ -638,7 +654,7 @@ class CTFParser {
                   << std::endl;
 #endif
       }
-      values.emplace_back(std::move(value));
+      values.push_back(std::move(value));
     }
 
     // Remove EOL
@@ -652,7 +668,6 @@ class CTFParser {
       CTFSample<DataType>& sample,
       const CTFSequenceID& sequence_id) {
     CTFName name;
-    std::vector<CTFValue<DataType>> values;
 
     if (!get_name(name)) {
       return false;
@@ -679,15 +694,17 @@ class CTFParser {
 #endif
       throw std::runtime_error(error_msg);
     }
-    if (!get_values(values, it_stream->format)) {
+    if (!get_values(sample.values, it_stream->format, it_stream->dimension)) {
+      sample.values.clear();
       return false;
     }
 
-    if (values.size() != 0 &&
+    if (sample.values.size() != 0 &&
         ((it_stream->format == CTFValueFormat::Dense &&
-          it_stream->dimension != values.size()) ||
+          it_stream->dimension != sample.values.size()) ||
          (it_stream->format != CTFValueFormat::Dense &&
-          it_stream->dimension != 0 && it_stream->dimension < values.size()))) {
+          it_stream->dimension != 0 &&
+          it_stream->dimension < sample.values.size()))) {
       std::string error_msg(
           "Invalid CTF File. Unexpected dimension for input name '" + name +
           "' was found at index " + std::to_string(buffer_pos_));
@@ -699,20 +716,20 @@ class CTFParser {
 
     sample.sequence_id = std::move(sequence_id);
     sample.input_name = std::move(name);
-    sample.values = std::move(values);
     return true;
   }
   void read_from_file_(long int offset) {
 #ifdef CTF_DEBUG
     size_t read_count = 0;
 #endif
-    CTFExample<DataType> example;
+    CTFExample<DataType> example(stream_defs_);
     CTFSequenceID sequence_id;
     CTFSequenceID previous_sequence_id = -1;
     bool has_initial_sequence_id = false;
     if (offset >= 0) {
       reader_->seek(offset);
     }
+
     while (reader_->can_read()) {
       size_t len =
           reader_->read_line(buffer_, CTFParser<DataType>::BUFFER_SIZE);
@@ -738,10 +755,10 @@ class CTFParser {
 #endif
         } else {
           sequence_id = previous_sequence_id + 1;
-          #ifdef CTF_DEBUG
+#ifdef CTF_DEBUG
           std::cout << "Using incremented previous Sequence ID ("
                     << previous_sequence_id << ")" << std::endl;
-          #endif
+#endif
         }
       } else {
         has_initial_sequence_id = true;
@@ -751,9 +768,14 @@ class CTFParser {
           (previous_sequence_id != sequence_id && sequence_id != LONG_MAX);
       if (is_new &&
           (example.features.size() > 0 || example.labels.size() > 0)) {
-        dataset_->examples.emplace_back(std::move(example));
+        dataset_->examples.push_back(std::move(example));
         example.features.clear();
         example.labels.clear();
+        example.features.reserve(
+            stream_defs_["features"]
+                .size()); // TODO: Possibly redundant because it is set on
+                          // constructor already
+        example.labels.reserve(stream_defs_["labels"].size());
       }
       previous_sequence_id = sequence_id;
       while (buffer_pos_ < len) {
@@ -782,15 +804,15 @@ class CTFParser {
                   CTFStreamInformation(sample.input_name));
           if (it_stream != stream_defs_[CTF_STREAM_DEFINITION_FEATURES].end()) {
             example.sequence_id = sequence_id;
-            example.features.emplace_back(std::move(sample));
+            example.features.push_back(std::move(sample));
           } else {
             example.sequence_id = sequence_id;
-            example.labels.emplace_back(std::move(sample));
+            example.labels.push_back(std::move(sample));
           }
         }
       }
     }
-    dataset_->examples.emplace_back(std::move(example));
+    dataset_->examples.push_back(std::move(example));
   }
   // DISALLOW_COPY_AND_ASSIGN(CTFParser<DataType>);
 

@@ -28,7 +28,7 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   {
     // 0 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
 
     { // |class 23:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
@@ -51,7 +51,7 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   {
     // 1 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
 
     { // |class 13:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));

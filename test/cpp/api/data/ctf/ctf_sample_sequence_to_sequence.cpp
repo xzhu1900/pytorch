@@ -29,7 +29,7 @@ TEST(DataTest, CTF_SAMPLE_SEQUENCE_TO_SEQUENCE_SUCCESS) {
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     { // |sourceWord 234:1
       torch::data::ctf::CTFSample<double> sample(
           seq_id, std::string("sourceWord"));
@@ -87,7 +87,7 @@ TEST(DataTest, CTF_SAMPLE_SEQUENCE_TO_SEQUENCE_SUCCESS) {
   {
     // 1
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     {
       // |sourceWord 123:1
       torch::data::ctf::CTFSample<double> sample(

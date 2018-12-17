@@ -28,7 +28,7 @@ TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
 
     { // |F0 0:0.421826 1:1.42167 2:-4.13626e-000123 5:-1.83832 7:-0.000114865
       // 9:-36288.6 11:113.553 13:4.25123e+009 16:-1.78095e-005 18:-0.00162638

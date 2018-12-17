@@ -29,7 +29,7 @@ TEST(DataTest, CTF_SAMPLE_SEQUENCE_CLASSIFICATION_SUCCESS) {
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     { // |word 234:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
@@ -60,7 +60,7 @@ TEST(DataTest, CTF_SAMPLE_SEQUENCE_CLASSIFICATION_SUCCESS) {
   {
     // 1
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     { // |word 11:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 11));

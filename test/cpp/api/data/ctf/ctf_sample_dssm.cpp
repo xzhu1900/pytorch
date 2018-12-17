@@ -27,7 +27,7 @@ TEST(DataTest, CTF_SAMPLE_DSSM_SUCCESS) {
   {
     // 0 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     {
       // |src 12:1 23:1 345:2 45001:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));
@@ -50,7 +50,7 @@ TEST(DataTest, CTF_SAMPLE_DSSM_SUCCESS) {
   {
     // 1 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     {
       // |src 123:1 56:1 10324:1 18001:3
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));

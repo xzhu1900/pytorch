@@ -27,7 +27,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
   {
     // 100
     torch::data::ctf::CTFSequenceID seq_id = 100;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     { // |a 1 2 3
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
@@ -90,7 +90,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
   {
     // 200
     torch::data::ctf::CTFSequenceID seq_id = 200;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     {
       // |b 300 400
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
@@ -111,7 +111,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
   {
     // 333
     torch::data::ctf::CTFSequenceID seq_id = 333;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     { // |b 500 100
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(500));
@@ -132,7 +132,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
   {
     // 400
     torch::data::ctf::CTFSequenceID seq_id = 400;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
     { // |a 1 2 3
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
@@ -187,7 +187,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
   {
     // 500
     torch::data::ctf::CTFSequenceID seq_id = 500;
-    torch::data::ctf::CTFExample<double> example(seq_id);
+    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
 
     { // |a 1 2 3
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
