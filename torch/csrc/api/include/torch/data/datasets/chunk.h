@@ -161,10 +161,11 @@ class ChunkDataBuffer {
       return this->total_example_count_in_queue_ < queue_depth_;
     });
 
+    size_t chunk_size = data.size();
     ChunkData<BatchType, ExampleSampler> chunk_data(
-        index, data.size(), data, example_sampler_);
+        index, chunk_size, std::move(data), example_sampler_);
     chunk_queue_.push(std::move(chunk_data));
-    total_example_count_in_queue_ += data.size();
+    total_example_count_in_queue_ += chunk_size;
     lock.unlock();
     cvr_.notify_all();
   }

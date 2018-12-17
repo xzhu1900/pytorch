@@ -20,7 +20,10 @@ set(TORCH_API_TEST_SOURCES
   ${TORCH_API_TEST_DIR}/tensor_options_cuda.cpp
   ${TORCH_API_TEST_DIR}/tensor_options.cpp
   ${TORCH_API_TEST_DIR}/tensor.cpp
+  ${TORCH_API_TEST_DIR}/htk_reader.cpp
 )
+
+set(BOOST_HOME "/home/xuzhu/sources/boost/boost_1_61_0")
 
 if (USE_CUDA)
   list(APPEND TORCH_API_TEST_SOURCES ${TORCH_API_TEST_DIR}/parallel.cpp)
@@ -28,6 +31,7 @@ endif()
 
 add_executable(test_api ${TORCH_API_TEST_SOURCES})
 target_include_directories(test_api PRIVATE ${ATen_CPU_INCLUDE})
+target_include_directories(test_api PUBLIC ${BOOST_HOME})
 target_link_libraries(test_api PRIVATE torch gtest)
 
 if (USE_CUDA)
