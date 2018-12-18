@@ -45,8 +45,8 @@ class HTKConverter():
                     for i in range(start, end):
                         x, size, y = self.dataset.__getitembinary__(i)
                         newFeature.write(chunk_idx.to_bytes(4, byteorder=endian))
+                        # somehow newLabel.write doesn't work for variable size -__-, switch to numpy tofile method for this one.
                         numpy.array([size],dtype='>u4').tofile(newFeature)
-                        #newLabel.write(size.to_bytes(4, byteorder=endian))
                         newFeature.write(x)
                         newFeature.flush()
 
@@ -55,9 +55,6 @@ class HTKConverter():
                         if (isBinary):
                             frame_len = self.dataset.__getitemframe__(i)
                             uttrance_len = (frame_len * 2)
-                            # numpy.array([uttrance_len],dtype='>u4').tofile(newLabel)
-                            # numpy.array([y_len],dtype='>u2').tofile(newLabel)
-                            # numpy.array(y,dtype='>u2').tofile(newLabel)
                             newLabel.write(uttrance_len.to_bytes(4, byteorder=endian))
                             y_len_in_bytes = y_len * 2 * 2
                             newLabel.write(y_len_in_bytes.to_bytes(2, byteorder=endian))
