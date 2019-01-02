@@ -13,23 +13,27 @@ namespace ctf {
 
 /// A sequential text reader to feed CTF parser
 ///
-/// Currently, one character at a time is read from the file
 /// C File API was used due to performance constraints
-/// TODO: Switch implementation to cache chunks of data from file in memory
-///       instead of reading each character directly from file
+/// Current implementation caches chunks of data from file in memory
+/// and parses CTF from it. When it gets empty, buffer is refilled and the cycle
+/// is repeated until EOF is reached
+///
 class Reader {
  public:
   virtual ~Reader();
   explicit Reader(const std::string& filename);
 
-  size_t read_line(std::vector<char>& buffer, size_t size);
-  size_t file_size() const;
-  bool seek(long int offset);
-  bool can_read();
-  std::string get_filename() const;
+  bool can_read(void) const;
+  const char& peek_char();
+  const char& get_char();
+  const size_t& get_position(void) const;
+  void rewind_char();
 
  private:
   /// File handling
+  bool refill(void);
+  bool can_buffer(void) const;
+  bool is_buffer_empty(void) const;
   std::string filename_;
   std::size_t file_size_;
   std::shared_ptr<FILE> file_;
@@ -40,6 +44,10 @@ class Reader {
   /// to fit a really long line on the CTF file
   static const size_t MAX_BUFFER_SIZE = 2 * 1024 * 1024;
   std::vector<char> buffer_;
+  size_t buffer_pos_;
+  size_t buffer_size_;
+  bool rewinded_char_;
+  char previous_char_;
 
   Reader() = delete;
   DISALLOW_COPY_AND_ASSIGN(Reader);
