@@ -8,17 +8,19 @@
 
 TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
   /// Actual data
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "A", "A", 5, torch::data::ctf::CTFValueFormat::Dense);
-  stream_defs["features"].emplace_back(
+  features_info.emplace_back(
       "B", "B", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "C", "C", 1, torch::data::ctf::CTFValueFormat::Dense);
   torch::data::ctf::CTFConfigHelper config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR + "/ctf_sample_comments.ctf"),
-      stream_defs,
+      features_info,
+      labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
   torch::data::ctf::CTFParser<double> ctf_parser(config);
@@ -30,7 +32,8 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
   {
     // 0 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
 
     {
       // |B 100:3 123:4
@@ -63,7 +66,8 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
   {
     // 1 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
     {
       // |A 0 1.1 22 0.3 54
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("A"));
@@ -95,7 +99,8 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
   {
     // 2 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 2;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
     {
       // |C -0.001
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("C"));
@@ -127,3 +132,4 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
+

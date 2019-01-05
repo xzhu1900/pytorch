@@ -8,16 +8,18 @@
 
 TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
   /// Actual data
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "rating", "rating", 1, torch::data::ctf::CTFValueFormat::Dense);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "features", "features", 12, torch::data::ctf::CTFValueFormat::Dense);
   torch::data::ctf::CTFConfigHelper config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR +
           "/ctf_sample_learning_to_rank.ctf"),
-      stream_defs,
+      features_info,
+      labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Int16));
 
   torch::data::ctf::CTFParser<double> ctf_parser(config);
@@ -29,7 +31,8 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
     { // |rating 4
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
@@ -110,7 +113,8 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
   {
     // 1
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
     { // |rating 1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
@@ -166,7 +170,8 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
   {
     // 2
     torch::data::ctf::CTFSequenceID seq_id = 2;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
 
     { // |rating 0
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
@@ -197,3 +202,4 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
+

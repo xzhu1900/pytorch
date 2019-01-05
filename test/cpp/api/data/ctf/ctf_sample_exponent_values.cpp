@@ -8,15 +8,17 @@
 
 TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
   /// Actual data
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "F0", "F0", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "T0", "T0", 1, torch::data::ctf::CTFValueFormat::Dense);
   torch::data::ctf::CTFConfigHelper config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR + "/ctf_sample_exponent_values.ctf"),
-      stream_defs,
+      features_info,
+      labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Int16));
 
   torch::data::ctf::CTFParser<double> ctf_parser(config);
@@ -28,7 +30,8 @@ TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
 
     { // |F0 0:0.421826 1:1.42167 2:-4.13626e-000123 5:-1.83832 7:-0.000114865
       // 9:-36288.6 11:113.553 13:4.25123e+009 16:-1.78095e-005 18:-0.00162638
@@ -62,3 +65,4 @@ TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
+

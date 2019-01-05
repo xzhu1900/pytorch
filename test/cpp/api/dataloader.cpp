@@ -1341,16 +1341,18 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportSingleWorkerSingleChunk) {
   const size_t total_workers = 1;
   const size_t total_example = 2;
   const size_t max_jobs = 2 * total_workers;
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
-      "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["labels"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
+  "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
+  labels_info.emplace_back(
       "tag", "tag", 0, torch::data::ctf::CTFValueFormat::Sparse);
   torch::data::ctf::CTFConfigHelper config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR +
           "/ctf_sample_part_of_speech_tagging.ctf"),
-      stream_defs,
+      features_info,
+      labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
   datasets::SharedBatchDataset<ctf::CTFChunkDataset<
@@ -1395,16 +1397,18 @@ TEST(
   const size_t total_example = 2;
   const size_t total_worker = 1;
   const size_t max_jobs = 2 * total_worker;
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "tag", "tag", 0, torch::data::ctf::CTFValueFormat::Sparse);
   torch::data::ctf::CTFConfigHelper config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR +
           "/ctf_sample_part_of_speech_tagging.ctf"),
-      stream_defs,
+      features_info,
+      labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
   datasets::SharedBatchDataset<ctf::CTFChunkDataset<
@@ -1451,10 +1455,11 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportMultipleWorkersMultipleChunks) {
   const size_t max_jobs = 2 * total_worker;
 
   std::vector<torch::data::ctf::CTFConfigHelper> configs;
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "tag", "tag", 0, torch::data::ctf::CTFValueFormat::Sparse);
 
   for (size_t i = 0; i < total_example; ++i) {
@@ -1462,7 +1467,8 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportMultipleWorkersMultipleChunks) {
         std::string(
             torch::data::ctf::CTF_SAMPLE_DIR +
             "/ctf_sample_multiple_chunks_000" + std::to_string(i) + ".ctf"),
-        stream_defs,
+        features_info,
+	labels_info,
         torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
     configs.push_back(config);

@@ -8,17 +8,19 @@
 
 TEST(DataTest, CTF_SAMPLE_EMPTY_VALUES_SUCCESS) {
   /// Actual data
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "F0", "F0", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["features"].emplace_back(
+  features_info.emplace_back(
       "F1", "F1", 1, torch::data::ctf::CTFValueFormat::Dense);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "F2", "F2", 1, torch::data::ctf::CTFValueFormat::Dense);
   torch::data::ctf::CTFConfigHelper config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR + "/ctf_sample_empty_values.ctf"),
-      stream_defs,
+      features_info,
+      labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Int16));
 
   torch::data::ctf::CTFParser<double> ctf_parser(config);
@@ -30,7 +32,8 @@ TEST(DataTest, CTF_SAMPLE_EMPTY_VALUES_SUCCESS) {
   {
     // 1
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
 
     { // |F0
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
@@ -42,7 +45,8 @@ TEST(DataTest, CTF_SAMPLE_EMPTY_VALUES_SUCCESS) {
   {
     // 2
     torch::data::ctf::CTFSequenceID seq_id = 2;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
 
     { // |F0
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
@@ -61,3 +65,4 @@ TEST(DataTest, CTF_SAMPLE_EMPTY_VALUES_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
+

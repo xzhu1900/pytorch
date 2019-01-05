@@ -11,7 +11,6 @@
 #include <iostream>
 #include <memory>
 #include <ostream>
-#include <unordered_map>
 #include <vector>
 
 namespace torch {
@@ -79,23 +78,26 @@ inline bool operator==(
   return lhs.name == rhs.name;
 }
 
-// There must be 'features' and 'labels' streams to define input ad output
-typedef std::unordered_map<std::string, std::vector<CTFStreamInformation>>
-    CTFStreamDefinitions;
-
 class CTFConfigHelper {
  public:
   explicit CTFConfigHelper(
       std::string filepath,
-      CTFStreamDefinitions stream_defs,
+      std::vector<CTFStreamInformation> features_info,
+      std::vector<CTFStreamInformation> labels_info,
       CTFDataType data_type)
       : filepath_(filepath),
-        stream_defs_(stream_defs),
+        features_info_(features_info),
+        labels_info_(labels_info),
         element_type_(data_type){};
 
-  const CTFStreamDefinitions& get_stream_definitions() const {
-    return stream_defs_;
+  const std::vector<CTFStreamInformation>& get_features_info() const {
+    return features_info_;
   }
+
+  const std::vector<CTFStreamInformation>& get_labels_info() const {
+    return labels_info_;
+  }
+
   const std::string& get_file_path() const {
     return filepath_;
   }
@@ -105,12 +107,10 @@ class CTFConfigHelper {
 
  private:
   std::string filepath_;
-  CTFStreamDefinitions stream_defs_;
+  std::vector<CTFStreamInformation> features_info_;
+  std::vector<CTFStreamInformation> labels_info_;
   CTFDataType element_type_;
 };
-
-static const std::string CTF_STREAM_DEFINITION_FEATURES("features");
-static const std::string CTF_STREAM_DEFINITION_LABELS("labels");
 
 typedef long int CTFSequenceID;
 typedef std::string CTFName;
@@ -139,7 +139,7 @@ struct CTFSample {
   explicit CTFSample(
       CTFSequenceID sequence_id,
       std::string input_name,
-      std::vector<CTFValue<DataType>>& values)
+      std::vector<CTFValue<DataType>> values)
       : sequence_id(sequence_id),
         input_name(std::move(input_name)),
         values(std::move(values)) {}
@@ -159,18 +159,22 @@ struct CTFSample {
 template <typename DataType>
 struct CTFExample {
   CTFExample() = delete;
-  CTFExample(CTFStreamDefinitions stream_defs) : sequence_id(0) {
+  CTFExample(size_t features_info_size, size_t labels_info_size)
+      : sequence_id(0) {
     features.clear();
     labels.clear();
-    features.reserve(stream_defs[CTF_STREAM_DEFINITION_FEATURES].size());
-    labels.reserve(stream_defs[CTF_STREAM_DEFINITION_LABELS].size());
+    features.reserve(features_info_size);
+    labels.reserve(labels_info_size);
   }
-  CTFExample(CTFSequenceID id, CTFStreamDefinitions stream_defs)
+  CTFExample(
+      CTFSequenceID id,
+      size_t features_info_size,
+      size_t labels_info_size)
       : sequence_id(id) {
     features.clear();
     labels.clear();
-    features.reserve(stream_defs[CTF_STREAM_DEFINITION_FEATURES].size());
-    labels.reserve(stream_defs[CTF_STREAM_DEFINITION_LABELS].size());
+    features.reserve(features_info_size);
+    labels.reserve(labels_info_size);
   }
 
   bool operator==(const CTFExample<DataType>& rhs) const {
@@ -302,17 +306,16 @@ template <typename DataType>
 class CTFParser {
  public:
   explicit CTFParser(const CTFConfigHelper& config)
-      : stream_defs_(config.get_stream_definitions()),
+      : features_info_(std::move(config.get_features_info())),
+        labels_info_(std::move(config.get_labels_info())),
         element_type_(config.get_ctf_data_type()) {
     reader_ = std::make_shared<Reader>(config.get_file_path());
     dataset_ =
         std::make_shared<CTFDataset<DataType>>(config.get_ctf_data_type());
 
-    if (stream_defs_.find(CTF_STREAM_DEFINITION_FEATURES) ==
-            stream_defs_.end() ||
-        stream_defs_.find(CTF_STREAM_DEFINITION_LABELS) == stream_defs_.end()) {
+    if ((features_info_.size() <= 0) || (labels_info_.size() <= 0)) {
       std::string error_msg(
-          "Missing 'features' or 'labels' on CTF stream definitions!");
+          "Missing 'features' or 'labels' CTF stream definitions!");
 #ifdef CTF_DEBUG
       std::cerr << error_msg << std::endl;
 #endif
@@ -363,7 +366,8 @@ class CTFParser {
 #ifdef CTF_DEBUG
     size_t read_count = 0;
 #endif
-    CTFExample<DataType> example(stream_defs_);
+    CTFExample<DataType> example(
+        features_info_.size(), labels_info_.size());
     CTFSequenceID sequence_id;
     CTFSequenceID previous_sequence_id = -1;
     bool has_initial_sequence_id = false;
@@ -409,7 +413,7 @@ class CTFParser {
           (previous_sequence_id != sequence_id && sequence_id != LONG_MAX);
       if (is_new &&
           (example.features.size() > 0 || example.labels.size() > 0)) {
-        dataset_->examples.push_back(std::move(example));
+        dataset_->examples.emplace_back(std::move(example));
         example.features.clear();
         example.labels.clear();
       }
@@ -436,22 +440,22 @@ class CTFParser {
         if (!sample.input_name.empty()) {
           std::vector<CTFStreamInformation>::const_iterator it_stream =
               std::find(
-                  stream_defs_[CTF_STREAM_DEFINITION_FEATURES].begin(),
-                  stream_defs_[CTF_STREAM_DEFINITION_FEATURES].end(),
+                  labels_info_.begin(),
+                  labels_info_.end(),
                   CTFStreamInformation(sample.input_name));
-          if (it_stream != stream_defs_[CTF_STREAM_DEFINITION_FEATURES].end()) {
-            example.sequence_id = sequence_id;
-            example.features.push_back(std::move(sample));
+
+          example.sequence_id = sequence_id;
+          if (it_stream != labels_info_.end()) {
+            example.labels.emplace_back(std::move(sample));
           } else {
-            example.sequence_id = sequence_id;
-            example.labels.push_back(std::move(sample));
+            example.features.emplace_back(std::move(sample));
           }
         }
       }
       // Discard EOL
       reader_->get_char();
     } while (reader_->can_read());
-    dataset_->examples.push_back(std::move(example));
+    dataset_->examples.emplace_back(std::move(example));
   }
 
  private:
@@ -610,8 +614,7 @@ class CTFParser {
         index_str = value_str;
         index_str_size = value_str_size;
         value_str_size = 0;
-        if (std::find(index_str.begin(), index_str.end(), '.') !=
-            index_str.end()) {
+        if (is_float) {
           std::string error_msg(
               "Unexpected symbol '.' at index of CTF Value at position " +
               std::to_string(reader_->get_position()));
@@ -746,9 +749,10 @@ class CTFParser {
       std::vector<CTFValue<DataType>>& values,
       CTFValueFormat format,
       size_t dimension) {
-    if (dimension > 0) {
-      values.reserve(dimension);
-    }
+    // TODO: Reserve something for sparse input?
+    if ((dimension > 0) && (format == CTFValueFormat::Dense)) {
+       values.reserve(dimension);
+     }
     while (!is_name_prefix(reader_->peek_char()) &&
            !is_comment_prefix(reader_->peek_char()) &&
            !is_eol(reader_->peek_char())) {
@@ -759,7 +763,7 @@ class CTFParser {
                   << std::endl;
 #endif
       }
-      values.push_back(std::move(value));
+      values.emplace_back(std::move(value));
     }
 
     return true;
@@ -777,18 +781,21 @@ class CTFParser {
 
     /// Match input name with the ones at 'features' and 'labels' definitions
     bool found = false;
-    std::vector<CTFStreamInformation>::const_iterator it_stream;
-    for (const auto& stream_vector : stream_defs_) {
+    auto it_stream = std::find(
+        labels_info_.begin(),
+        labels_info_.end(),
+        CTFStreamInformation(name));
+    if (it_stream != labels_info_.end()) {
+      found = true;
+    } else {
       it_stream = std::find(
-          stream_vector.second.begin(),
-          stream_vector.second.end(),
+          features_info_.begin(),
+          features_info_.end(),
           CTFStreamInformation(name));
-      if (it_stream != stream_vector.second.end()) {
+      if (it_stream != features_info_.end()) {
         found = true;
-        break;
       }
     }
-
     if (!found) {
       std::string error_msg(
           "CTF Value format not found for input name '" + name + "'.");
@@ -797,6 +804,7 @@ class CTFParser {
 #endif
       throw std::runtime_error(error_msg);
     }
+
     if (!get_values(sample.values, it_stream->format, it_stream->dimension)) {
       sample.values.clear();
       return false;
@@ -822,10 +830,9 @@ class CTFParser {
     return true;
   }
 
-  // DISALLOW_COPY_AND_ASSIGN(CTFParser<DataType>);
-
   // CTF Stream definitions for features and labels
-  CTFStreamDefinitions stream_defs_;
+  std::vector<CTFStreamInformation> features_info_;
+  std::vector<CTFStreamInformation> labels_info_;
   // type for CTF values
   CTFDataType element_type_;
   // dataset holding all parsed entries
@@ -844,3 +851,4 @@ class CTFParser {
 } // namespace ctf
 } // namespace data
 } // namespace torch
+

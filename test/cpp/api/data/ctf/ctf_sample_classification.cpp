@@ -8,15 +8,17 @@
 
 TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   /// Actual data
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "features", "features", 5, torch::data::ctf::CTFValueFormat::Dense);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "class", "class", 0, torch::data::ctf::CTFValueFormat::Sparse);
   torch::data::ctf::CTFConfigHelper config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR + "/ctf_sample_classification.ctf"),
-      stream_defs,
+      features_info,
+      labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Int16));
 
   torch::data::ctf::CTFParser<double> ctf_parser(config);
@@ -28,7 +30,7 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   {
     // 0 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(seq_id, features_info.size(), labels_info.size());
 
     { // |class 23:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
@@ -51,7 +53,7 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   {
     // 1 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(seq_id, features_info.size(), labels_info.size());
 
     { // |class 13:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
@@ -74,3 +76,4 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
+

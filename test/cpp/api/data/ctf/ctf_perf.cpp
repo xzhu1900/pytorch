@@ -41,10 +41,11 @@ int main(int argc, char* argv[]) {
             << "Batches: " << total_batch << std::endl;
 
   std::vector<torch::data::ctf::CTFConfigHelper> configs;
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "M", "M", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "R", "R", 0, torch::data::ctf::CTFValueFormat::Sparse);
 
   for (size_t i = 0; i < total_files; ++i) {
@@ -52,8 +53,10 @@ int main(int argc, char* argv[]) {
     ss << std::setw(10) << std::setfill('0') << i;
     std::string str = ss.str();
 
-    torch::data::ctf::CTFConfigHelper config(std::string(argv[1] + str + ".ctf"),
-        stream_defs,
+    torch::data::ctf::CTFConfigHelper config(
+        std::string(argv[1] + str + ".ctf"),
+        features_info,
+        labels_info,
         torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
     configs.push_back(config);

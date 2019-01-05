@@ -8,14 +8,15 @@
 
 TEST(DataTest, CTF_SAMPLE_DSSM_SUCCESS) {
   /// Actual data
-  torch::data::ctf::CTFStreamDefinitions stream_defs;
-  stream_defs["features"].emplace_back(
+  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
+  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
+  features_info.emplace_back(
       "src", "src", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  stream_defs["labels"].emplace_back(
+  labels_info.emplace_back(
       "tgt", "tgt", 0, torch::data::ctf::CTFValueFormat::Sparse);
   torch::data::ctf::CTFConfigHelper config(
       std::string(torch::data::ctf::CTF_SAMPLE_DIR + "/ctf_sample_dssm.ctf"),
-      stream_defs,
+      features_info, labels_info,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
   torch::data::ctf::CTFParser<double> ctf_parser(config);
@@ -27,7 +28,8 @@ TEST(DataTest, CTF_SAMPLE_DSSM_SUCCESS) {
   {
     // 0 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
     {
       // |src 12:1 23:1 345:2 45001:1
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));
@@ -50,7 +52,8 @@ TEST(DataTest, CTF_SAMPLE_DSSM_SUCCESS) {
   {
     // 1 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id, stream_defs);
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
     {
       // |src 123:1 56:1 10324:1 18001:3
       torch::data::ctf::CTFSample<double> sample(seq_id, std::string("src"));
@@ -75,3 +78,4 @@ TEST(DataTest, CTF_SAMPLE_DSSM_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
+
