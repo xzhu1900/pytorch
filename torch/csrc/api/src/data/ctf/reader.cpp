@@ -47,20 +47,6 @@ Reader::Reader(const std::string& filename)
   refill();
 }
 
-bool Reader::can_read() const {
-  return (!is_buffer_empty() || can_buffer());
-}
-
-bool Reader::can_buffer() const {
-  return (
-      !is_eof_ && !std::feof(file_.get()) &&
-      (std::ftell(file_.get()) != file_size_));
-}
-
-bool Reader::is_buffer_empty() const {
-  return ((buffer_size_ == 0) || (buffer_size_ == buffer_pos_));
-}
-
 bool Reader::refill(void) {
   if (!is_buffer_empty()) {
 #ifdef CTF_DEBUG
@@ -101,40 +87,6 @@ bool Reader::refill(void) {
             << " from file " << filename_ << std::endl;
 #endif
   return true;
-}
-
-const size_t& Reader::get_position() const {
-  return buffer_pos_;
-}
-
-const char& Reader::peek_char() {
-  if (is_buffer_empty()) {
-    refill();
-  }
-  if (rewinded_char_) {
-    return previous_char_;
-  } else {
-    return buffer_[buffer_pos_];
-  }
-}
-
-const char& Reader::get_char() {
-  if (buffer_pos_ > 0) {
-    previous_char_ = buffer_[buffer_pos_ - 1];
-  }
-  if (is_buffer_empty()) {
-    refill();
-  }
-  if (rewinded_char_) {
-    rewinded_char_ = false;
-    return previous_char_;
-  } else {
-    return buffer_[buffer_pos_++];
-  }
-}
-
-void Reader::rewind_char() {
-  rewinded_char_ = true;
 }
 
 } // namespace ctf

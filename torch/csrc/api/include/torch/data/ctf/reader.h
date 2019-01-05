@@ -23,17 +23,51 @@ class Reader {
   virtual ~Reader();
   explicit Reader(const std::string& filename);
 
-  bool can_read(void) const;
-  const char& peek_char();
-  const char& get_char();
-  const size_t& get_position(void) const;
-  void rewind_char();
+  inline bool can_read(void) const {
+    return (!is_buffer_empty() || can_buffer());
+  }
+  inline const char& peek_char(void) {
+    if (is_buffer_empty()) {
+      refill();
+    }
+    if (rewinded_char_) {
+      return previous_char_;
+    } else {
+      return buffer_[buffer_pos_];
+    }
+  }
+  inline const char& get_char(void) {
+    if (buffer_pos_ > 0) {
+      previous_char_ = buffer_[buffer_pos_ - 1];
+    }
+    if (is_buffer_empty()) {
+      refill();
+    }
+    if (rewinded_char_) {
+      rewinded_char_ = false;
+      return previous_char_;
+    } else {
+      return buffer_[buffer_pos_++];
+    }
+  }
+  inline const size_t& get_position(void) const {
+    return buffer_pos_;
+  }
+  inline void rewind_char(void) {
+    rewinded_char_ = true;
+  }
 
  private:
   /// File handling
   bool refill(void);
-  bool can_buffer(void) const;
-  bool is_buffer_empty(void) const;
+  inline bool can_buffer(void) const {
+    return (
+        !is_eof_ && !std::feof(file_.get()) &&
+        (std::ftell(file_.get()) != file_size_));
+  }
+  inline bool is_buffer_empty(void) const {
+    return ((buffer_size_ == 0) || (buffer_size_ == buffer_pos_));
+  }
   std::string filename_;
   std::size_t file_size_;
   std::shared_ptr<FILE> file_;
