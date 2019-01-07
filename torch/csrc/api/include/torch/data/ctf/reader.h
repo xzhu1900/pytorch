@@ -76,7 +76,7 @@ class Reader {
 
   /// Buffer handling buffer_size must be big enough
   /// to fit a really long line on the CTF file
-  static const size_t MAX_BUFFER_SIZE = 2 * 1024 * 1024;
+  const size_t CTF_MAX_BUFFER_SIZE = 2 * 1024 * 1024;
   std::vector<char> buffer_;
   size_t buffer_pos_;
   size_t buffer_size_;

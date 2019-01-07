@@ -27,33 +27,33 @@ TEST(DataTest, CTF_SAMPLE_SEQUENCE_CLASSIFICATION_SUCCESS) {
 
   /// Expected data
   torch::data::ctf::CTFDataset<double> dataset(
-      torch::data::ctf::CTFDataType::Double);
+      torch::data::ctf::CTFDataType::Double, 2);
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
     torch::data::ctf::CTFExample<double> example(
         seq_id, features_info.size(), labels_info.size());
     { // |word 234:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      torch::data::ctf::CTFSample<double> sample(std::string("word"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 234));
       example.features.push_back(sample);
     }
 
     {
       // |class 3:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
+      torch::data::ctf::CTFSample<double> sample(std::string("class"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 3));
       example.labels.push_back(sample);
     }
 
     { // |word 123:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      torch::data::ctf::CTFSample<double> sample(std::string("word"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 123));
       example.features.push_back(sample);
     }
 
     { // |word 890:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      torch::data::ctf::CTFSample<double> sample(std::string("word"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 890));
       example.features.push_back(sample);
     }
@@ -66,19 +66,19 @@ TEST(DataTest, CTF_SAMPLE_SEQUENCE_CLASSIFICATION_SUCCESS) {
     torch::data::ctf::CTFExample<double> example(
         seq_id, features_info.size(), labels_info.size());
     { // |word 11:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      torch::data::ctf::CTFSample<double> sample(std::string("word"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 11));
       example.features.push_back(sample);
     }
     {
       // |class 2:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
+      torch::data::ctf::CTFSample<double> sample(std::string("class"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 2));
       example.labels.push_back(sample);
     }
 
     { // |word 344:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("word"));
+      torch::data::ctf::CTFSample<double> sample(std::string("word"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 344));
       example.features.push_back(sample);
     }
@@ -87,4 +87,3 @@ TEST(DataTest, CTF_SAMPLE_SEQUENCE_CLASSIFICATION_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
-

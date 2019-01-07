@@ -26,7 +26,7 @@ TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
 
   /// Expected data
   torch::data::ctf::CTFDataset<double> dataset(
-      torch::data::ctf::CTFDataType::Double);
+      torch::data::ctf::CTFDataType::Double, 1);
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
@@ -36,7 +36,7 @@ TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
     { // |F0 0:0.421826 1:1.42167 2:-4.13626e-000123 5:-1.83832 7:-0.000114865
       // 9:-36288.6 11:113.553 13:4.25123e+009 16:-1.78095e-005 18:-0.00162638
       // 19:-1.07109
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("F0"));
+      torch::data::ctf::CTFSample<double> sample(std::string("F0"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0.421826, 0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1.42167, 1));
       sample.values.push_back(
@@ -56,7 +56,7 @@ TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
       example.features.push_back(sample);
     }
     { // |T0 1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("T0"));
+      torch::data::ctf::CTFSample<double> sample(std::string("T0"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       example.labels.push_back(sample);
     }
@@ -65,4 +65,3 @@ TEST(DataTest, CTF_SAMPLE_EXPONENT_VALUE_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
-

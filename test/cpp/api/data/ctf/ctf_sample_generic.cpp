@@ -25,14 +25,14 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
   /// Expected data
   torch::data::ctf::CTFDataset<double> dataset(
-      torch::data::ctf::CTFDataType::Double);
+      torch::data::ctf::CTFDataType::Double, 5);
   {
     // 100
     torch::data::ctf::CTFSequenceID seq_id = 100;
     torch::data::ctf::CTFExample<double> example(
         seq_id, features_info.size(), labels_info.size());
     { // |a 1 2 3
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
@@ -41,14 +41,14 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |b 100 200
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(100));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(200));
       example.labels.push_back(sample);
     }
 
     { // |a 4 5 6
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(5));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(6));
@@ -57,14 +57,14 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |b 101 201
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(101));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(201));
       example.labels.push_back(sample);
     }
 
     { // |b 102983 14532
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(102983));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(14532));
       example.labels.push_back(sample);
@@ -72,7 +72,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |a 7 8 9
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(7));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(8));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(9));
@@ -81,7 +81,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |a 7 8 9
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(7));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(8));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(9));
@@ -97,13 +97,13 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
         seq_id, features_info.size(), labels_info.size());
     {
       // |b 300 400
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(300));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(400));
       example.labels.push_back(sample);
     }
     { // |a 10 20 30
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(10));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(20));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(30));
@@ -118,7 +118,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
     torch::data::ctf::CTFExample<double> example(
         seq_id, features_info.size(), labels_info.size());
     { // |b 500 100
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(500));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(100));
       example.labels.push_back(sample);
@@ -126,7 +126,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |b 600 -900
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(600));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(-900));
       example.labels.push_back(sample);
@@ -140,7 +140,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
     torch::data::ctf::CTFExample<double> example(
         seq_id, features_info.size(), labels_info.size());
     { // |a 1 2 3
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
@@ -149,14 +149,14 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |b 100 200
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(100));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(200));
       example.labels.push_back(sample);
     }
 
     { // |a 4 5 6
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(5));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(6));
@@ -165,7 +165,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |b 101 201
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(101));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(201));
       example.labels.push_back(sample);
@@ -173,7 +173,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     { // |a 4 5 6 TODO: repeated lines should be considered invalid. Add
       // this validation
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(5));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(6));
@@ -182,7 +182,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |b 101 201
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(101));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(201));
       example.labels.push_back(sample);
@@ -197,7 +197,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
         seq_id, features_info.size(), labels_info.size());
 
     { // |a 1 2 3
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("a"));
+      torch::data::ctf::CTFSample<double> sample(std::string("a"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
@@ -206,7 +206,7 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
     {
       // |b 100 200
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("b"));
+      torch::data::ctf::CTFSample<double> sample(std::string("b"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(100));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(200));
       example.labels.push_back(sample);
@@ -216,4 +216,3 @@ TEST(DataTest, CTF_SAMPLE_GENERIC_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
-

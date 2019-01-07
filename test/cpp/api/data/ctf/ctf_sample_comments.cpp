@@ -28,7 +28,7 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
 
   /// Expected data
   torch::data::ctf::CTFDataset<double> dataset(
-      torch::data::ctf::CTFDataType::Double);
+      torch::data::ctf::CTFDataType::Double, 3);
   {
     // 0 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 0;
@@ -37,7 +37,7 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
 
     {
       // |B 100:3 123:4
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("B"));
+      torch::data::ctf::CTFSample<double> sample(std::string("B"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(3, 100));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(4, 123));
       example.features.push_back(sample);
@@ -45,14 +45,14 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
 
     {
       // |C 8
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("C"));
+      torch::data::ctf::CTFSample<double> sample(std::string("C"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(8));
       example.labels.push_back(sample);
     }
 
     {
       // |A 0 1 2 3 4
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("A"));
+      torch::data::ctf::CTFSample<double> sample(std::string("A"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
@@ -70,7 +70,7 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
         seq_id, features_info.size(), labels_info.size());
     {
       // |A 0 1.1 22 0.3 54
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("A"));
+      torch::data::ctf::CTFSample<double> sample(std::string("A"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1.1));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(22));
@@ -81,14 +81,14 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
 
     {
       // |C 123917
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("C"));
+      torch::data::ctf::CTFSample<double> sample(std::string("C"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(123917));
       example.labels.push_back(sample);
     }
 
     {
       // |B 1134:1.911 13331:0.014
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("B"));
+      torch::data::ctf::CTFSample<double> sample(std::string("B"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1.911, 1134));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0.014, 13331));
       example.features.push_back(sample);
@@ -103,14 +103,14 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
         seq_id, features_info.size(), labels_info.size());
     {
       // |C -0.001
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("C"));
+      torch::data::ctf::CTFSample<double> sample(std::string("C"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(-0.001));
       example.labels.push_back(sample);
     }
 
     {
       // |A 3.9 1.11 121.2 99.13 0.04
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("A"));
+      torch::data::ctf::CTFSample<double> sample(std::string("A"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(3.9));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1.11));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(121.2));
@@ -121,7 +121,7 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
 
     {
       // |B 999:0.001 918918:-9.19
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("B"));
+      torch::data::ctf::CTFSample<double> sample(std::string("B"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0.001, 999));
       sample.values.push_back(
           torch::data::ctf::CTFValue<double>(-9.19, 918918));
@@ -132,4 +132,3 @@ TEST(DataTest, CTF_SAMPLE_COMMENTS_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
-

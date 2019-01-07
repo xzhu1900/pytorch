@@ -27,22 +27,21 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
 
   /// Expected data
   torch::data::ctf::CTFDataset<double> dataset(
-      torch::data::ctf::CTFDataType::Double);
+      torch::data::ctf::CTFDataType::Double, 3);
   {
     // 0
     torch::data::ctf::CTFSequenceID seq_id = 0;
     torch::data::ctf::CTFExample<double> example(
         seq_id, features_info.size(), labels_info.size());
     { // |rating 4
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      torch::data::ctf::CTFSample<double> sample(std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
       example.features.push_back(sample);
     }
 
     {
       // |features 23 35 0 0 0 21 2345 0 0 0 0 0
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(23));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(35));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
@@ -59,15 +58,14 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
     }
 
     { // |rating 2
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      torch::data::ctf::CTFSample<double> sample(std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
       example.features.push_back(sample);
     }
 
     {
       // |features 0 123 0 22 44 44 290 22 22 22 33 0
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(123));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
@@ -84,15 +82,14 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
     }
 
     { // |rating 1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      torch::data::ctf::CTFSample<double> sample(std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       example.features.push_back(sample);
     }
 
     {
       // |features 0 0 0 0 0 0 1 0 0 0 0 0
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
@@ -116,15 +113,14 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
     torch::data::ctf::CTFExample<double> example(
         seq_id, features_info.size(), labels_info.size());
     { // |rating 1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      torch::data::ctf::CTFSample<double> sample(std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       example.features.push_back(sample);
     }
 
     {
       // |features 34 56 0 0 0 45 1312 0 0 0 0 0
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(34));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(56));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
@@ -141,15 +137,14 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
     }
 
     { // |rating 0
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      torch::data::ctf::CTFSample<double> sample(std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       example.features.push_back(sample);
     }
 
     {
       // |features 45 45 0 0 0 12 335 0 0 0 0 0
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(45));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
@@ -174,15 +169,14 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
         seq_id, features_info.size(), labels_info.size());
 
     { // |rating 0
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("rating"));
+      torch::data::ctf::CTFSample<double> sample(std::string("rating"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       example.features.push_back(sample);
     }
 
     {
       // |features 0 0 0 0 0 0 22 0 0 0 0 0
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
@@ -202,4 +196,3 @@ TEST(DataTest, CTF_SAMPLE_LEARNING_TO_RANK_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
-

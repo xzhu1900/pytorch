@@ -43,7 +43,7 @@ Reader::Reader(const std::string& filename)
   file_size_ = std::ftell(file_.get());
   std::rewind(file_.get());
 
-  buffer_.resize(Reader::MAX_BUFFER_SIZE);
+   buffer_.resize(Reader::CTF_MAX_BUFFER_SIZE);
   refill();
 }
 
@@ -66,14 +66,14 @@ bool Reader::refill(void) {
   buffer_pos_ = 0;
   file_pos_ = ftell(file_.get());
   size_t bytes_read =
-      std::fread(&buffer_[0], 1, Reader::MAX_BUFFER_SIZE, file_.get());
+      std::fread(&buffer_[0], 1, Reader::CTF_MAX_BUFFER_SIZE, file_.get());
 
   if (feof(file_.get()) != 0) {
     is_eof_ = true;
   }
 
   if ((ferror(file_.get()) != 0) ||
-      (bytes_read != Reader::MAX_BUFFER_SIZE && !std::feof(file_.get()))) {
+      (bytes_read != Reader::CTF_MAX_BUFFER_SIZE && !std::feof(file_.get()))) {
     std::string error_msg(
         "Error reading file " + filename_ + ". " + strerror(errno));
 #ifdef CTF_DEBUG

@@ -26,20 +26,20 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
 
   /// Expected data
   torch::data::ctf::CTFDataset<double> dataset(
-      torch::data::ctf::CTFDataType::Double);
+      torch::data::ctf::CTFDataType::Double, 2);
   {
     // 0 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(seq_id, features_info.size(), labels_info.size());
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
 
     { // |class 23:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
+      torch::data::ctf::CTFSample<double> sample(std::string("class"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 23));
       example.labels.push_back(sample);
     }
     { // |features 2 3 4 5 6
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
@@ -53,17 +53,17 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   {
     // 1 (implicit)
     torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(seq_id, features_info.size(), labels_info.size());
+    torch::data::ctf::CTFExample<double> example(
+        seq_id, features_info.size(), labels_info.size());
 
     { // |class 13:1
-      torch::data::ctf::CTFSample<double> sample(seq_id, std::string("class"));
+      torch::data::ctf::CTFSample<double> sample(std::string("class"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 13));
       example.labels.push_back(sample);
     }
     {
       // |features 2 3 4 5 6
-      torch::data::ctf::CTFSample<double> sample(
-          seq_id, std::string("features"));
+      torch::data::ctf::CTFSample<double> sample(std::string("features"));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
       sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
@@ -76,4 +76,3 @@ TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
-
