@@ -320,11 +320,13 @@ class ChunkDataSet final
   }
 
   /// This will clear any internal state and starts the internal prefetching
-  /// mechanism for the chunk dataset. It simply starts a mini dataloader.
+  /// mechanism for the chunk dataset.
   virtual void reset() {
     // free workers from previous reset if there is any.
     free_workers();
     preload_threads_.clear();
+
+    chunk_reader_.reset();
 
     size_t chunks_to_load = chunk_reader_.get_chunk_count();
     chunk_sampler_.reset(chunks_to_load);

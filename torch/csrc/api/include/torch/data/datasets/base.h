@@ -23,13 +23,6 @@ MapDataset<D, T> map(D, T); // NOLINT
 } // namespace torch
 
 namespace torch {
-namespace serialize {
-class OutputArchive;
-class InputArchive;
-} // namespace serialize
-} // namespace torch
-
-namespace torch {
 namespace data {
 namespace datasets {
 namespace detail {

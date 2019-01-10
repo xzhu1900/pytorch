@@ -7,4 +7,3 @@
 #include <torch/data/datasets/shared.h>
 #include <torch/data/datasets/stateful.h>
 #include <torch/data/datasets/tensor.h>
-#include <torch/data/datasets/chunk.h>

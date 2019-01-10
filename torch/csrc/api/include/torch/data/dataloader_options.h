@@ -37,9 +37,6 @@ struct DataLoaderOptions {
   /// Whether to omit the last batch if it contains less than `batch_size`
   /// examples.
   TORCH_ARG(bool, drop_last) = false;
-
-  /// Enable chunk data loading. A chunk data set must be used with this flag.
-  TORCH_ARG(bool, chunk_loading) = false;
 };
 
 /// Like `DataLoaderOptions`, but without any unconfigured state.
@@ -55,9 +52,7 @@ struct FullDataLoaderOptions {
         max_jobs(options.max_jobs_.value_or(2 * workers)),
         timeout(options.timeout_),
         enforce_ordering(options.enforce_ordering_),
-        drop_last(options.drop_last_),
-        chunk_loading(options.chunk_loading_) 
-        {}
+        drop_last(options.drop_last_) {}
 
   size_t batch_size;
   size_t workers;
@@ -65,7 +60,6 @@ struct FullDataLoaderOptions {
   optional<std::chrono::milliseconds> timeout;
   bool enforce_ordering;
   bool drop_last;
-  bool chunk_loading;
 };
 } // namespace data
 } // namespace torch
