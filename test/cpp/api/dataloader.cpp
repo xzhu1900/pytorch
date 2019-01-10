@@ -60,6 +60,8 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
   ASSERT_EQ(batch, expected);
 }
 
+// dummy chunk data reader with 3 chunks and 35 examples in total. Each chunk
+// contains 10, 5, 20 examples respectively.
 struct DummyChunkDataReader
     : public datasets::ChunkDataReader<DummyChunkDataReader, std::vector<int>> {
  public:
@@ -89,7 +91,7 @@ struct DummyChunkDataReader
   size_t chunk_sizes[chunk_count_] = {10, 5, 20};
 };
 
-TEST(DataTest, ChunkDataSetInvalidInitParameter) {
+TEST(DataTest, ChunkDataSetWithInvalidInitParameter) {
   DummyChunkDataReader data_reader;
   samplers::SequentialSampler sampler(0);
 
@@ -1339,55 +1341,25 @@ TEST(DataLoaderTest, StatefulDatasetWithCollate) {
   ASSERT_TRUE(batch->target[0].allclose(torch::zeros(kBatchSize - 1)));
 }
 
-class DummyChunkReader
-    : public datasets::ChunkDataReader<DummyChunkReader, std::vector<int>> {
- public:
-  using BatchType = std::vector<int>;
-  using BatchRequestType = size_t;
-
-  DummyChunkReader(size_t num_chunks, size_t chunk_size)
-      : datasets::ChunkDataReader<DummyChunkReader, std::vector<int>>(),
-        num_chunks_(num_chunks),
-        chunk_size_(chunk_size) {}
-
-  DummyChunkReader(DummyChunkReader&& other) {
-    num_chunks_ = other.num_chunks_;
-    chunk_size_ = other.chunk_size_;
-    chunk_index_ = other.chunk_index_.load();
-  }
-
-  std::vector<int> read_chunk(size_t chunk_index) override {
-    std::vector<int> batch(chunk_size_);
-    size_t counter = chunk_index * chunk_size_;
-    for (auto& i : batch) {
-      i = counter++;
-    }
-    return batch;
-  }
-
-  size_t get_chunk_count() override {
-    return num_chunks_;
-  }
-
-  void reset() override {}
-
- private:
-  std::atomic<int> chunk_index_{0};
-  size_t num_chunks_;
-  size_t chunk_size_;
-};
-
 // This test tests the core function for iterate through a chunk dataset. It
 // contains test cases with different parameter combination. (For example,
 // different prefetch count, batch size and data loader worker count). It
 // verifies the return batches size and content when the order is deterministic.
 TEST(DataLoaderTest, ChunkDataSetGetBatch) {
+  // different prefetch count for testing.
   const size_t prefetch_counts[] = {1, 2, 3, 4};
+
+  // different batch size for testing.
   const size_t batch_sizes[] = {5, 7};
-  const size_t dataloader_worker_counts[] = {0};
+
+  // test with/without worker threads
+  const size_t dataloader_worker_counts[] = {0, 2};
+
   const size_t total_example_count = 35;
   DummyChunkDataReader data_reader;
   samplers::SequentialSampler sampler(0);
+
+  // test functionality across epoch boundary
   const int epoch_count = 2;
 
   for (auto prefetch_count : prefetch_counts) {
@@ -1411,9 +1383,14 @@ TEST(DataLoaderTest, ChunkDataSetGetBatch) {
         for (int epoch_index = 0; epoch_index < epoch_count; ++epoch_index) {
           std::vector<bool> result(total_example_count, false);
           int iteration_count = 0;
-          for (auto iterator = data_loader->begin(); iterator!= data_loader->end();  ++iterator, ++iteration_count) {
+          for (auto iterator = data_loader->begin();
+               iterator != data_loader->end();
+               ++iterator, ++iteration_count) {
             std::vector<int>& batch = *iterator;
             ASSERT_EQ(batch.size(), batch_size);
+
+            // When prefetch_count is equal to 1 and no worker thread, the batch
+            // order is deterministic. So we can verify elements in each batch.
             if (prefetch_count == 1 && dataloader_worker_count == 0) {
               for (size_t j = 0; j < batch_size; ++j) {
                 ASSERT_EQ(batch[j], iteration_count * batch_size + j);
@@ -1433,7 +1410,7 @@ TEST(DataLoaderTest, ChunkDataSetGetBatch) {
   }
 }
 
-TEST(DataLoaderTest, ChunkDataSetBatchSizeMismatch) {
+TEST(DataLoaderTest, ChunkDataSetWithBatchSizeMismatch) {
   const size_t prefetch_count = 1;
   const size_t batch_size = 5;
   const size_t requested_batch_size = 6;
@@ -1481,7 +1458,7 @@ struct DummyEmptyChunkDataReader
   const static size_t chunk_count_ = 3;
 };
 
-TEST(DataLoaderTest, ChunkDataSetEmptyBatchThrowException) {
+TEST(DataLoaderTest, ChunkDataSetWithEmptyBatchThrowException) {
   const size_t prefetch_count = 1;
   const size_t batch_size = 5;
   DummyEmptyChunkDataReader data_reader;
@@ -1503,7 +1480,7 @@ TEST(DataLoaderTest, ChunkDataSetEmptyBatchThrowException) {
   ASSERT_THROWS_WITH(*(data_loader->begin()), "Chunk with index 0 is empty");
 }
 
-TEST(DataLoaderTest, ChunkDataSetEmptyBatchIgnoreEmptyChunk) {
+TEST(DataLoaderTest, ChunkDataSetWithEmptyBatchIgnoreEmptyChunk) {
   const size_t prefetch_count = 1;
   const size_t batch_size = 5;
   DummyEmptyChunkDataReader data_reader;
@@ -1527,36 +1504,32 @@ TEST(DataLoaderTest, ChunkDataSetEmptyBatchIgnoreEmptyChunk) {
   }
 }
 
-struct DummyChunkDataReader2
-    : public datasets::
-          ChunkDataReader<DummyChunkDataReader2, std::vector<int>> {
- public:
-  using BatchType = std::vector<int>;
+TEST(DataLoaderTest, ChunkDataSetGetBatchWithUnevenBatchSize) {
+  struct D : public datasets::ChunkDataReader<D, std::vector<int>> {
+   public:
+    using BatchType = std::vector<int>;
 
-  BatchType read_chunk(size_t chunk_index) override {
-    BatchType batch_data(10, 0);
-    return batch_data;
-  }
+    BatchType read_chunk(size_t chunk_index) override {
+      BatchType batch_data(10, 0);
+      return batch_data;
+    }
 
-  size_t get_chunk_count() override {
-    return 2;
+    size_t get_chunk_count() override { return 2; };
+
+    void reset() override{};
   };
 
-  void reset() override{};
-};
-
-TEST(DataLoaderTest, ChunkDataSetGetBatchWithUnevenBatchSize) {
   const size_t batch_sizes[] = { 17, 30 };
-  DummyChunkDataReader2 data_reader;
+  D data_reader;
   samplers::SequentialSampler sampler(0);
 
   for (auto batch_size : batch_sizes) {
     datasets::SharedBatchDataset<datasets::ChunkDataSet<
-        DummyChunkDataReader2,
+        D,
         samplers::SequentialSampler,
         samplers::SequentialSampler>>
         dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
-            DummyChunkDataReader2,
+            D,
             samplers::SequentialSampler,
             samplers::SequentialSampler>>(
             data_reader, sampler, sampler, 1, batch_size, true);

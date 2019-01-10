@@ -51,9 +51,11 @@ struct UnwrappedBatchData {
   std::exception_ptr exception;
 };
 
-/// BatchDataBuffer manages a queue of UnwrappedBatchData. It fetches batch data
-/// for ChunkDataSet, tracks when new UnwrappedBatchData is needed, and when all
-/// chunk are loaded.
+/// BatchDataBuffer manages a queue of UnwrappedBatchData. After a new chunk is
+/// loaded, BatchDataBuffer splits it into small batches and push them into the
+/// queue. When get_batch is called from data loader, it pops cached batches and
+/// return. If the cache is empty, it either waits to load more chunks or return
+/// null if all chunks are loaded.
 template <
     typename UnwrappedBatch = std::vector<Example<>>,
     typename ExampleSampler = samplers::RandomSampler>
@@ -202,6 +204,9 @@ class BatchDataBuffer {
   /// to 0, no more chunk needs to be loaded.
   size_t remaining_chunk_count_ = 0;
 
+  /// The batch size is needed to create batches from the chunk data. Similar to
+  /// regular dataloader where the batches are created with prefetches,
+  /// BatchDataBuffer perform the batch creation using the provided batch size.
   size_t batch_size_ = 0;
 
   /// count of total example stored in the queue
@@ -227,7 +232,7 @@ class BatchDataBuffer {
 };
 
 /// A stateful dataset that support hierarchical sampling and prefetching of
-/// entre chunks. dataset that supports loading an entire chunk of data.
+/// entre chunks.
 ///
 /// Unlike regular dataset, chunk dataset require two samplers to operate and
 /// keeps an internal state. `ChunkSampler` selects, which chunk to load next,
