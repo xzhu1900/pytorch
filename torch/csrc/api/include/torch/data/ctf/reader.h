@@ -61,17 +61,13 @@ class Reader {
   /// File handling
   bool refill(void);
   inline bool can_buffer(void) const {
-    return (
-        !is_eof_ && !std::feof(file_.get()) &&
-        (std::ftell(file_.get()) != file_size_));
+    return (!is_eof_);
   }
   inline bool is_buffer_empty(void) const {
     return ((buffer_size_ == 0) || (buffer_size_ == buffer_pos_));
   }
   std::string filename_;
-  std::size_t file_size_;
   std::shared_ptr<FILE> file_;
-  size_t file_pos_;
   bool is_eof_;
 
   /// Buffer handling buffer_size must be big enough
