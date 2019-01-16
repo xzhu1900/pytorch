@@ -121,7 +121,7 @@ class BatchDataBuffer {
     };
 
     if (!batch_queue_.empty()) {
-      // if the queue has exiting data, and the last batch doesn't have enough
+      // if the queue has existing data, and the last batch doesn't have enough
       // examples to fill a batch_size batch, add more example to this batch first.
       auto& batch = batch_queue_.back();
       size_t current_count = batch.batch_data.size();
@@ -210,8 +210,8 @@ class BatchDataBuffer {
 
   ExampleSampler example_sampler_;
 
-  // indicator for whether an empty chunk should be ignored. When it is true, an
-  // example will throw, otherwise, this empty chunk is skipped.
+  // indicator for whether an empty chunk should be ignored. When it is false, an
+  // empty chunk will throw, otherwise,it is skipped.
   bool ignore_empty_chunk_ = false;
 
   // configurable maximun number of elements the queue can hold at one time.
