@@ -52,7 +52,7 @@ class BatchDataBuffer {
         batch_size_(batch_size),
         example_sampler_(std::move(example_sampler)),
         ignore_empty_chunk_(ignore_empty_chunk),
-        queue_depth_(cache_size) {}
+        queue_capacity_(cache_size) {}
 
   /// Return batch data from the queue. Called from the ChunkDataset main
   /// thread.
@@ -101,7 +101,7 @@ class BatchDataBuffer {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     cv_write_.wait(lock, [this] {
       // stop loading if we have preloaded enough data.
-      return this->total_example_count_in_queue_ < this->queue_depth_;
+      return this->total_example_count_in_queue_ < this->queue_capacity_;
     });
 
     auto data_size = data.size();
@@ -159,7 +159,7 @@ class BatchDataBuffer {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     cv_write_.wait(lock, [this] {
       // stop loading if we have preloaded enough data.
-      return this->total_example_count_in_queue_ < this->queue_depth_;
+      return this->total_example_count_in_queue_ < this->queue_capacity_;
     });
 
     batch_queue_.emplace(e_ptr);
@@ -214,8 +214,8 @@ class BatchDataBuffer {
   // example will throw, otherwise, this empty chunk is skipped.
   bool ignore_empty_chunk_ = false;
 
-  // configurable queue depth for batch_queue_
-  size_t queue_depth_;
+  // configurable maximun number of elements the queue can hold at one time.
+  size_t queue_capacity_;
 };
 } // namespace detail
 
@@ -330,7 +330,8 @@ class ChunkDataset final
     size_t chunks_to_load = chunk_reader_.chunk_count();
     chunk_sampler_.reset(chunks_to_load);
 
-    // Creates a new chunk buffer each time we reset the dataset.
+    // Throw out any existing cached batch in the buffer and re-creates a new
+    // chunk buffer.
     batch_buffer_ = torch::make_unique<
         detail::BatchDataBuffer<UnwrappedBatchType, ExampleSamplerType>>(
         chunks_to_load,
