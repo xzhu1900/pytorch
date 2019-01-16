@@ -47,12 +47,12 @@ class BatchDataBuffer {
       size_t batch_size,
       ExampleSampler example_sampler,
       bool ignore_empty_chunk,
-      size_t cache_size)
+      size_t queue_capacity)
       : remaining_chunk_count_(num_chunks),
         batch_size_(batch_size),
         example_sampler_(std::move(example_sampler)),
         ignore_empty_chunk_(ignore_empty_chunk),
-        queue_capacity_(cache_size) {}
+        queue_capacity_(queue_capacity) {}
 
   /// Return batch data from the queue. Called from the ChunkDataset main
   /// thread.
@@ -101,8 +101,12 @@ class BatchDataBuffer {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     cv_write_.wait(lock, [this] {
       // stop loading if we have preloaded enough data.
-      return this->total_example_count_in_queue_ < this->queue_capacity_;
+      return this->total_example_count_in_queue_ < this->queue_capacity_ || stop_;
     });
+
+    if (stop_){
+      return;
+    }
 
     auto data_size = data.size();
     auto remaining_size = data_size;
@@ -159,8 +163,12 @@ class BatchDataBuffer {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     cv_write_.wait(lock, [this] {
       // stop loading if we have preloaded enough data.
-      return this->total_example_count_in_queue_ < this->queue_capacity_;
+      return this->total_example_count_in_queue_ < this->queue_capacity_ || stop_;
     });
+
+    if (stop_){
+      return;
+    }
 
     batch_queue_.emplace(e_ptr);
 
@@ -168,6 +176,11 @@ class BatchDataBuffer {
     remaining_chunk_count_--;
     lock.unlock();
     cv_read_.notify_all();
+  }
+
+  void stop(){
+    stop_ = true;
+    cv_write_.notify_all();
   }
 
   /// count of remaining chunk to be loaded. It is initialized with the total
@@ -216,6 +229,14 @@ class BatchDataBuffer {
 
   // configurable maximun number of elements the queue can hold at one time.
   size_t queue_capacity_;
+
+  // When set to true, it wakes the writer threads from the wait and exit current
+  // function call. This is needed when ChunkDataSet.Reset is called while the
+  // previous epoch is not exhausted yet. When ChunkDataset is waiting its
+  // preloader to finish previous work before tearing down the thread, the
+  // preloader could be still waiting for the conditional variable, thus cause
+  // the program to hang. This boolean is used to break this waiting condition.
+  bool stop_ = false;
 };
 } // namespace detail
 
@@ -226,7 +247,7 @@ struct ChunkDatasetOptions {
       size_t preloader_count,
       size_t batch_size,
       bool ignore_empty_chunk = false,
-      size_t cache_size = 500)
+      size_t cache_size = 2048)
       : preloader_count_(preloader_count),
         batch_size_(batch_size),
         ignore_empty_chunk_(ignore_empty_chunk),
@@ -258,7 +279,7 @@ struct ChunkDatasetOptions {
   TORCH_ARG(bool, ignore_empty_chunk) = false;
 
   // the capacity of the queue for batch caching.
-  TORCH_ARG(size_t, cache_size) = 500;
+  TORCH_ARG(size_t, cache_size) = 2048;
 };
 
 /// A stateful dataset that support hierarchical sampling and prefetching of
@@ -386,6 +407,9 @@ class ChunkDataset final
   void free_workers() {
     if (!quit_worker_) {
       quit_worker_ = true;
+      if(batch_buffer_){
+        batch_buffer_->stop();
+      }
       for (auto& worker_thread : preload_threads_) {
         worker_thread.join();
       }
