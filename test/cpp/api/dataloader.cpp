@@ -63,7 +63,7 @@ TEST(DataTest, TransformCallsGetApplyCorrectly) {
 // dummy chunk data reader with 3 chunks and 35 examples in total. Each chunk
 // contains 10, 5, 20 examples respectively.
 struct DummyChunkDataReader
-    : public datasets::ChunkDataReader<DummyChunkDataReader, std::vector<int>> {
+    : public datasets::ChunkDataReader<std::vector<int>> {
  public:
   using BatchType = std::vector<int>;
 
@@ -81,7 +81,7 @@ struct DummyChunkDataReader
     return batch_data;
   }
 
-  size_t get_chunk_count() override {
+  size_t chunk_count() override {
     return chunk_count_;
   };
 
@@ -96,15 +96,15 @@ TEST(DataTest, ChunkDataSetWithInvalidInitParameter) {
   samplers::SequentialSampler sampler(0);
 
   auto initialization_function = [&](size_t preloader_count, size_t batch_size, size_t cache_size){
-    datasets::SharedBatchDataset<datasets::ChunkDataSet<
+    datasets::SharedBatchDataset<datasets::ChunkDataset<
           DummyChunkDataReader,
           samplers::SequentialSampler,
           samplers::SequentialSampler>> dataset =
-          datasets::make_shared_dataset<datasets::ChunkDataSet<
+          datasets::make_shared_dataset<datasets::ChunkDataset<
               DummyChunkDataReader,
               samplers::SequentialSampler,
               samplers::SequentialSampler>>(
-              data_reader, sampler, sampler, preloader_count, batch_size, false, cache_size);
+              data_reader, sampler, sampler, datasets::ChunkDatasetOptions(preloader_count, batch_size, false, cache_size));
   };
 
   ASSERT_THROWS_WITH(
@@ -1365,15 +1365,15 @@ TEST(DataLoaderTest, ChunkDataSetGetBatch) {
   for (auto prefetch_count : prefetch_counts) {
     for (auto batch_size : batch_sizes) {
       for (auto dataloader_worker_count : dataloader_worker_counts) {
-        datasets::SharedBatchDataset<datasets::ChunkDataSet<
+        datasets::SharedBatchDataset<datasets::ChunkDataset<
             DummyChunkDataReader,
             samplers::SequentialSampler,
             samplers::SequentialSampler>>
-            dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+            dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
                 DummyChunkDataReader,
                 samplers::SequentialSampler,
                 samplers::SequentialSampler>>(
-                data_reader, sampler, sampler, prefetch_count, batch_size);
+                data_reader, sampler, sampler, datasets::ChunkDatasetOptions(prefetch_count, batch_size));
 
         auto data_loader = torch::data::make_data_loader(
             dataset,
@@ -1418,15 +1418,15 @@ TEST(DataLoaderTest, ChunkDataSetWithBatchSizeMismatch) {
   DummyChunkDataReader data_reader;
   samplers::SequentialSampler sampler(0);
 
-  datasets::SharedBatchDataset<datasets::ChunkDataSet<
+  datasets::SharedBatchDataset<datasets::ChunkDataset<
       DummyChunkDataReader,
       samplers::SequentialSampler,
       samplers::SequentialSampler>>
-      dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+      dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
           DummyChunkDataReader,
           samplers::SequentialSampler,
           samplers::SequentialSampler>>(
-          data_reader, sampler, sampler, prefetch_count, batch_size);
+          data_reader, sampler, sampler, datasets::ChunkDatasetOptions(prefetch_count, batch_size));
 
   auto data_loader = torch::data::make_data_loader(
       dataset,
@@ -1434,14 +1434,13 @@ TEST(DataLoaderTest, ChunkDataSetWithBatchSizeMismatch) {
 
   std::string exception_msg =
       "The requested batch size does not match with the initialized batch size.\n"
-      " The requested batch size is 6, while the data set is created with batch size equal to 5";
+      " The requested batch size is 6, while the dataset is created with batch size equal to 5";
 
   ASSERT_THROWS_WITH(*(data_loader->begin()), exception_msg);
 }
 
 struct DummyEmptyChunkDataReader
-    : public datasets::
-          ChunkDataReader<DummyEmptyChunkDataReader, std::vector<int>> {
+    : public datasets:: ChunkDataReader<std::vector<int>> {
  public:
   using BatchType = std::vector<int>;
 
@@ -1449,7 +1448,7 @@ struct DummyEmptyChunkDataReader
     return {};
   }
 
-  size_t get_chunk_count() override {
+  size_t chunk_count() override {
     return chunk_count_;
   };
 
@@ -1464,15 +1463,15 @@ TEST(DataLoaderTest, ChunkDataSetWithEmptyBatchThrowException) {
   DummyEmptyChunkDataReader data_reader;
   samplers::SequentialSampler sampler(0);
 
-  datasets::SharedBatchDataset<datasets::ChunkDataSet<
+  datasets::SharedBatchDataset<datasets::ChunkDataset<
       DummyEmptyChunkDataReader,
       samplers::SequentialSampler,
       samplers::SequentialSampler>>
-      dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+      dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
           DummyEmptyChunkDataReader,
           samplers::SequentialSampler,
           samplers::SequentialSampler>>(
-          data_reader, sampler, sampler, prefetch_count, batch_size);
+          data_reader, sampler, sampler, datasets::ChunkDatasetOptions(prefetch_count, batch_size));
 
   auto data_loader = torch::data::make_data_loader(
       dataset, DataLoaderOptions(batch_size).workers(0));
@@ -1486,15 +1485,15 @@ TEST(DataLoaderTest, ChunkDataSetWithEmptyBatchIgnoreEmptyChunk) {
   DummyEmptyChunkDataReader data_reader;
   samplers::SequentialSampler sampler(0);
 
-  datasets::SharedBatchDataset<datasets::ChunkDataSet<
+  datasets::SharedBatchDataset<datasets::ChunkDataset<
       DummyEmptyChunkDataReader,
       samplers::SequentialSampler,
       samplers::SequentialSampler>>
-      dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+      dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
           DummyEmptyChunkDataReader,
           samplers::SequentialSampler,
           samplers::SequentialSampler>>(
-          data_reader, sampler, sampler, prefetch_count, batch_size, true);
+          data_reader, sampler, sampler, datasets::ChunkDatasetOptions(prefetch_count, batch_size, true));
 
   auto data_loader = torch::data::make_data_loader(
       dataset, DataLoaderOptions(batch_size).workers(0));
@@ -1505,7 +1504,7 @@ TEST(DataLoaderTest, ChunkDataSetWithEmptyBatchIgnoreEmptyChunk) {
 }
 
 TEST(DataLoaderTest, ChunkDataSetGetBatchWithUnevenBatchSize) {
-  struct D : public datasets::ChunkDataReader<D, std::vector<int>> {
+  struct D : public datasets::ChunkDataReader<std::vector<int>> {
    public:
     using BatchType = std::vector<int>;
 
@@ -1514,7 +1513,7 @@ TEST(DataLoaderTest, ChunkDataSetGetBatchWithUnevenBatchSize) {
       return batch_data;
     }
 
-    size_t get_chunk_count() override { return 2; };
+    size_t chunk_count() override { return 2; };
 
     void reset() override{};
   };
@@ -1524,15 +1523,15 @@ TEST(DataLoaderTest, ChunkDataSetGetBatchWithUnevenBatchSize) {
   samplers::SequentialSampler sampler(0);
 
   for (auto batch_size : batch_sizes) {
-    datasets::SharedBatchDataset<datasets::ChunkDataSet<
+    datasets::SharedBatchDataset<datasets::ChunkDataset<
         D,
         samplers::SequentialSampler,
         samplers::SequentialSampler>>
-        dataset = datasets::make_shared_dataset<datasets::ChunkDataSet<
+        dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
             D,
             samplers::SequentialSampler,
             samplers::SequentialSampler>>(
-            data_reader, sampler, sampler, 1, batch_size, true);
+            data_reader, sampler, sampler, datasets::ChunkDatasetOptions(1, batch_size, true));
 
     auto data_loader = torch::data::make_data_loader(
         dataset, DataLoaderOptions(batch_size).workers(0));
