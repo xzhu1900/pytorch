@@ -1341,18 +1341,24 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportSingleWorkerSingleChunk) {
   const size_t total_workers = 1;
   const size_t total_example = 2;
   const size_t max_jobs = 2 * total_workers;
-  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
-  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
-  features_info.emplace_back(
-  "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  labels_info.emplace_back(
-      "tag", "tag", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  torch::data::ctf::CTFConfigHelper config(
+  std::vector<torch::data::ctf::CTFInputStreamInformation> input_streams;
+  input_streams.emplace_back(
+      "word",
+      "word",
+      0,
+      torch::data::ctf::CTFInputStreamType::Feature,
+      torch::data::ctf::CTFDataStorage::Sparse);
+  input_streams.emplace_back(
+      "tag",
+      "tag",
+      0,
+      torch::data::ctf::CTFInputStreamType::Label,
+      torch::data::ctf::CTFDataStorage::Sparse);
+  torch::data::ctf::CTFConfiguration config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR +
           "/ctf_sample_part_of_speech_tagging.ctf"),
-      features_info,
-      labels_info,
+      input_streams,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
   datasets::SharedBatchDataset<ctf::CTFChunkDataset<
@@ -1378,12 +1384,15 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportSingleWorkerSingleChunk) {
   // batch max_jobs to ensure chunk is fully read.
   // Empty batches are ignored by the tests
   for (size_t i = 0; i < max_jobs; ++i, ++iterator) {
-    std::vector<ctf::CTFExample<double>> batch = *iterator;
+    std::vector<torch::data::ctf::CTFSequenceData> batch = *iterator;
     if (batch.size() != 0) {
       count_example += batch.size();
       ASSERT_EQ(batch.size(), batch_size);
-      ASSERT_EQ(batch[0].features[0].input_name, "word");
-      ASSERT_EQ(batch[0].labels[0].input_name, "tag");
+      torch::data::ctf::CTFSparseInputStreamData<double>* sparse_data =
+          reinterpret_cast<torch::data::ctf::CTFSparseInputStreamData<double>*>(
+              batch[0][0].get());
+      ASSERT_EQ(sparse_data->data[0], 1);
+      // TODO: Add more checks after using new ChunkDataSet...
     }
   }
   ASSERT_EQ(total_example, count_example);
@@ -1397,18 +1406,24 @@ TEST(
   const size_t total_example = 2;
   const size_t total_worker = 1;
   const size_t max_jobs = 2 * total_worker;
-  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
-  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
-  features_info.emplace_back(
-      "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  labels_info.emplace_back(
-      "tag", "tag", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  torch::data::ctf::CTFConfigHelper config(
+  std::vector<torch::data::ctf::CTFInputStreamInformation> input_streams;
+  input_streams.emplace_back(
+      "word",
+      "word",
+      0,
+      torch::data::ctf::CTFInputStreamType::Feature,
+      torch::data::ctf::CTFDataStorage::Sparse);
+  input_streams.emplace_back(
+      "tag",
+      "tag",
+      0,
+      torch::data::ctf::CTFInputStreamType::Label,
+      torch::data::ctf::CTFDataStorage::Sparse);
+  torch::data::ctf::CTFConfiguration config(
       std::string(
           torch::data::ctf::CTF_SAMPLE_DIR +
           "/ctf_sample_part_of_speech_tagging.ctf"),
-      features_info,
-      labels_info,
+      input_streams,
       torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
   datasets::SharedBatchDataset<ctf::CTFChunkDataset<
@@ -1434,11 +1449,14 @@ TEST(
   // batch max_jobs to ensure chunk is fully read.
   // Empty batches are ignored by the tests
   for (size_t i = 0; i < max_jobs; ++i, ++iterator) {
-    std::vector<ctf::CTFExample<double>> batch = *iterator;
+    std::vector<torch::data::ctf::CTFSequenceData> batch = *iterator;
     if (batch.size() != 0) {
       ASSERT_EQ(batch.size(), batch_size);
-      ASSERT_EQ(batch[i].features[0].input_name, "word");
-      ASSERT_EQ(batch[i].labels[0].input_name, "tag");
+      torch::data::ctf::CTFSparseInputStreamData<double>* sparse_data =
+          reinterpret_cast<torch::data::ctf::CTFSparseInputStreamData<double>*>(
+              batch[0][0].get());
+      ASSERT_EQ(sparse_data->data[0], 1);
+      // TODO: Add more checks after using new ChunkDataSet...
       count_example += batch.size();
     }
   }
@@ -1454,21 +1472,27 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportMultipleWorkersMultipleChunks) {
   const size_t total_worker = 10;
   const size_t max_jobs = 2 * total_worker;
 
-  std::vector<torch::data::ctf::CTFConfigHelper> configs;
-  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
-  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
-  features_info.emplace_back(
-      "word", "word", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  labels_info.emplace_back(
-      "tag", "tag", 0, torch::data::ctf::CTFValueFormat::Sparse);
+  std::vector<torch::data::ctf::CTFConfiguration> configs;
+  std::vector<torch::data::ctf::CTFInputStreamInformation> input_streams;
+  input_streams.emplace_back(
+      "word",
+      "word",
+      0,
+      torch::data::ctf::CTFInputStreamType::Feature,
+      torch::data::ctf::CTFDataStorage::Sparse);
+  input_streams.emplace_back(
+      "tag",
+      "tag",
+      0,
+      torch::data::ctf::CTFInputStreamType::Label,
+      torch::data::ctf::CTFDataStorage::Sparse);
 
   for (size_t i = 0; i < total_example; ++i) {
-    torch::data::ctf::CTFConfigHelper config(
+    torch::data::ctf::CTFConfiguration config(
         std::string(
             torch::data::ctf::CTF_SAMPLE_DIR +
             "/ctf_sample_multiple_chunks_000" + std::to_string(i) + ".ctf"),
-        features_info,
-	labels_info,
+        input_streams,
         torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
     configs.push_back(config);
@@ -1497,11 +1521,14 @@ TEST(DataTest, CTFDataLoaderWithChunkSupportMultipleWorkersMultipleChunks) {
   // batch max_jobs to ensure chunk is fully read.
   // Empty batches are ignored by the tests
   for (size_t i = 0; i < max_jobs; ++i, ++iterator) {
-    std::vector<ctf::CTFExample<double>> batch = *iterator;
+    std::vector<torch::data::ctf::CTFSequenceData> batch = *iterator;
     count_example += batch.size();
     for (size_t b = 0; b < batch.size(); ++b) {
-      ASSERT_EQ(batch[b].features[0].input_name, "word");
-      ASSERT_EQ(batch[b].labels[0].input_name, "tag");
+      torch::data::ctf::CTFSparseInputStreamData<double>* sparse_data =
+          reinterpret_cast<torch::data::ctf::CTFSparseInputStreamData<double>*>(
+              batch[0][0].get());
+      ASSERT_EQ(sparse_data->data[0], 1);
+      // TODO: Add more checks after using new ChunkDataSet...
     }
   }
   ASSERT_EQ(total_example, count_example);

@@ -40,23 +40,21 @@ int main(int argc, char* argv[]) {
             << "Workers: " << total_worker << std::endl
             << "Batches: " << total_batch << std::endl;
 
-  std::vector<torch::data::ctf::CTFConfigHelper> configs;
-  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
-  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
-  features_info.emplace_back(
-      "M", "M", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  labels_info.emplace_back(
-      "R", "R", 0, torch::data::ctf::CTFValueFormat::Sparse);
+  std::vector<torch::data::ctf::CTFConfiguration> configs;
+  std::vector<torch::data::ctf::CTFInputStreamInformation> input_streams;
+  input_streams.emplace_back(0,
+      "M", "M", 0, torch::data::ctf::CTFInputStreamType::Feature, torch::data::ctf::CTFDataStorage::Sparse);
+  input_streams.emplace_back(1,
+      "R", "R", 0, torch::data::ctf::CTFInputStreamType::Label, torch::data::ctf::CTFDataStorage::Sparse);
 
   for (size_t i = 0; i < total_files; ++i) {
     std::ostringstream ss;
     ss << std::setw(10) << std::setfill('0') << i;
     std::string str = ss.str();
 
-    torch::data::ctf::CTFConfigHelper config(
+    torch::data::ctf::CTFConfiguration config(
         std::string(argv[1] + str + ".ctf"),
-        features_info,
-        labels_info,
+        input_streams,
         torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Double));
 
     configs.push_back(config);

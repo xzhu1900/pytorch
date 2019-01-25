@@ -11,6 +11,7 @@ namespace torch {
 namespace data {
 namespace ctf {
 
+
 template <
     typename DataType = double,
     typename ChunkSampler = samplers::RandomSampler,
@@ -18,25 +19,25 @@ template <
 class CTFChunkDataset
     : public datasets::ChunkDataSet<
           CTFChunkDataset<DataType, ChunkSampler, ExampleSampler>,
-          std::vector<CTFExample<DataType>>,
+          std::vector<CTFSequenceData>,
           ChunkSampler,
           ExampleSampler> {
  public:
-  using BatchType = std::vector<CTFExample<DataType>>;
+  using BatchType = std::vector<CTFSequenceData>;
   using ChunkSamplerType = ChunkSampler;
   using ExampleSamplerType = ExampleSampler;
 
   /// Loads multiple CTF files on multiple chunks with parallelization
   /// TODO: CTF files are not splitted, so they must fit in memory
   explicit CTFChunkDataset(
-      std::vector<ctf::CTFConfigHelper> configs,
+      std::vector<ctf::CTFConfiguration> configs,
       size_t prefetch_count)
       : datasets::ChunkDataSet<
             CTFChunkDataset<DataType, ChunkSampler, ExampleSampler>,
-            std::vector<CTFExample<DataType>>,
+            std::vector<CTFSequenceData>,
             ChunkSampler,
             ExampleSampler>(prefetch_count, false),
-        configs_(configs),
+        config_(configs),
         chunk_sampler_(std::move(ChunkSampler(0))),
         example_sampler_(std::move(ExampleSampler(0))) {
     num_chunks_ = configs.size();
@@ -44,26 +45,26 @@ class CTFChunkDataset
 
   /// Loads a single CTF file on a single chunk without parallelization
   /// TODO: CTF files are not splitted, so they must fit in memory
-  explicit CTFChunkDataset(ctf::CTFConfigHelper config)
+  explicit CTFChunkDataset(ctf::CTFConfiguration config)
       : datasets::ChunkDataSet<
             CTFChunkDataset<DataType, ChunkSampler, ExampleSampler>,
-            std::vector<CTFExample<DataType>>,
+            std::vector<CTFSequenceData>,
             ChunkSampler,
             ExampleSampler>(1, false),
         chunk_sampler_(std::move(ChunkSampler(0))),
         example_sampler_(std::move(ExampleSampler(0))) {
     num_chunks_ = 1;
-    configs_.push_back(config);
+    config_.push_back(config);
   }
 
-  std::vector<CTFExample<DataType>> read_chunk(size_t chunk_index) override {
+  std::vector<CTFSequenceData> read_chunk(size_t chunk_index) override {
     // read file (which is a full chunk)
-    ctf::CTFParser<DataType> ctf_parser(configs_[chunk_index]);
+    ctf::CTFParser<DataType> ctf_parser(config_[chunk_index]);
     ctf_parser.read_from_file();
     std::shared_ptr<CTFDataset<DataType>> ctf_dataset =
         ctf_parser.get_dataset();
 
-    return std::move(ctf_dataset->examples);
+    return std::move(ctf_dataset->sequences);
   }
 
   ChunkSampler get_chunk_sampler() override {
@@ -78,12 +79,14 @@ class CTFChunkDataset
     return num_chunks_;
   }
 
+
  private:
-  std::vector<ctf::CTFConfigHelper> configs_;
+  std::vector<ctf::CTFConfiguration> config_;
   size_t num_chunks_;
   ChunkSampler chunk_sampler_;
   ExampleSampler example_sampler_;
 };
+
 
 } // namespace ctf
 } // namespace data

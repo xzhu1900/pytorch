@@ -4,75 +4,123 @@
 #include <torch/data/ctf/ctf_parser.h>
 
 /// Tests must be executed from root directory of the repo
-/// Order of CTFValue<double>s inside CTFSample are important
+/// Order of CTFValue<int16_t>s inside CTFSample are important
+
+namespace torch {
+namespace data {
+namespace ctf {
 
 TEST(DataTest, CTF_SAMPLE_CLASSIFICATION_SUCCESS) {
   /// Actual data
-  std::vector<torch::data::ctf::CTFStreamInformation> features_info;
-  std::vector<torch::data::ctf::CTFStreamInformation> labels_info;
-  features_info.emplace_back(
-      "features", "features", 5, torch::data::ctf::CTFValueFormat::Dense);
-  labels_info.emplace_back(
-      "class", "class", 0, torch::data::ctf::CTFValueFormat::Sparse);
-  torch::data::ctf::CTFConfigHelper config(
-      std::string(
-          torch::data::ctf::CTF_SAMPLE_DIR + "/ctf_sample_classification.ctf"),
-      features_info,
-      labels_info,
-      torch::data::ctf::CTFDataType(torch::data::ctf::CTFDataType::Int16));
+  std::vector<CTFInputStreamInformation> input_streams;
+  input_streams.emplace_back(
+      0,
+      "features",
+      "features",
+      5,
+      CTFInputStreamType::Feature,
+      CTFDataStorage::Dense);
+  input_streams.emplace_back(
+      1,
+      "class",
+      "class",
+      0,
+      CTFInputStreamType::Label,
+      CTFDataStorage::Sparse);
+  CTFConfiguration config(
+      std::string(CTF_SAMPLE_DIR + "/ctf_sample_classification.ctf"),
+      input_streams,
+      CTFDataType(CTFDataType::Int16));
 
-  torch::data::ctf::CTFParser<double> ctf_parser(config);
+  CTFParser<int16_t> ctf_parser(config);
   ctf_parser.read_from_file();
 
   /// Expected data
-  torch::data::ctf::CTFDataset<double> dataset(
-      torch::data::ctf::CTFDataType::Double, 2);
+  CTFDataset<int16_t> dataset(CTFDataType::Int16, input_streams);
+#ifdef CTF_DEBUG
+  size_t sequence_id = 0;
+#endif
+  size_t input_stream_id = 0;
+
   {
     // 0 (implicit)
-    torch::data::ctf::CTFSequenceID seq_id = 0;
-    torch::data::ctf::CTFExample<double> example(
-        seq_id, features_info.size(), labels_info.size());
-
-    { // |class 23:1
-      torch::data::ctf::CTFSample<double> sample(std::string("class"));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 23));
-      example.labels.push_back(sample);
+#ifdef CTF_DEBUG
+    sequence_id = 0;
+#endif
+    CTFSequenceData sequence;
+    input_stream_id = 0;
+    sequence.emplace_back(std::make_shared<CTFDenseInputStreamData<int16_t>>(
+        input_stream_id, input_streams[input_stream_id].dimension));
+    input_stream_id = 1;
+    sequence.emplace_back(std::make_shared<CTFSparseInputStreamData<int16_t>>(
+        input_stream_id, input_streams[input_stream_id].dimension));
+    {
+      input_stream_id = 1;
+      auto sparse_stream_ptr =
+          static_cast<CTFSparseInputStreamData<int16_t>*>(
+              sequence[input_stream_id].get());
+      // |class 23:1
+      sparse_stream_ptr->data.push_back(1);
+      sparse_stream_ptr->indices.push_back(23);
     }
-    { // |features 2 3 4 5 6
-      torch::data::ctf::CTFSample<double> sample(std::string("features"));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(4));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(5));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(6));
-      example.features.push_back(sample);
+    {
+      input_stream_id = 0;
+      auto dense_stream_ptr = static_cast<CTFDenseInputStreamData<int16_t>*>(
+          sequence[input_stream_id].get());
+      // |features 2 3 4 5 6
+      dense_stream_ptr->data.push_back(2);
+      dense_stream_ptr->data.push_back(3);
+      dense_stream_ptr->data.push_back(4);
+      dense_stream_ptr->data.push_back(5);
+      dense_stream_ptr->data.push_back(6);
     }
-    dataset.examples.push_back(example);
+    dataset.sequences.push_back(sequence);
+#ifdef CTF_DEBUG
+    dataset.sequences_id.push_back(sequence_id);
+#endif
   }
 
   {
     // 1 (implicit)
-    torch::data::ctf::CTFSequenceID seq_id = 1;
-    torch::data::ctf::CTFExample<double> example(
-        seq_id, features_info.size(), labels_info.size());
+#ifdef CTF_DEBUG
+    sequence_id = 1;
+#endif
+    CTFSequenceData sequence;
+    input_stream_id = 0;
+    sequence.emplace_back(std::make_shared<CTFDenseInputStreamData<int16_t>>(
+        input_stream_id, input_streams[input_stream_id].dimension));
+    input_stream_id = 1;
+    sequence.emplace_back(std::make_shared<CTFSparseInputStreamData<int16_t>>(
+        input_stream_id, input_streams[input_stream_id].dimension));
 
-    { // |class 13:1
-      torch::data::ctf::CTFSample<double> sample(std::string("class"));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(1, 13));
-      example.labels.push_back(sample);
+    {
+      input_stream_id = 1;
+      auto sparse_stream_ptr =
+          static_cast<CTFSparseInputStreamData<int16_t>*>(
+              sequence[input_stream_id].get());
+      // |class 13:1
+      sparse_stream_ptr->data.push_back(1);
+      sparse_stream_ptr->indices.push_back(13);
     }
     {
-      // |features 2 3 4 5 6
-      torch::data::ctf::CTFSample<double> sample(std::string("features"));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(1));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(0));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(2));
-      sample.values.push_back(torch::data::ctf::CTFValue<double>(3));
-      example.features.push_back(sample);
+      input_stream_id = 0;
+      auto dense_stream_ptr = static_cast<CTFDenseInputStreamData<int16_t>*>(
+          sequence[input_stream_id].get());
+      // |features 1 2 0 2 3
+      dense_stream_ptr->data.push_back(1);
+      dense_stream_ptr->data.push_back(2);
+      dense_stream_ptr->data.push_back(0);
+      dense_stream_ptr->data.push_back(2);
+      dense_stream_ptr->data.push_back(3);
     }
-    dataset.examples.push_back(example);
+    dataset.sequences.push_back(sequence);
+#ifdef CTF_DEBUG
+    dataset.sequences_id.push_back(sequence_id);
+#endif
   }
 
   EXPECT_TRUE(*ctf_parser.get_dataset() == dataset);
 }
+} // namespace ctf
+} // namespace data
+} // namespace torch

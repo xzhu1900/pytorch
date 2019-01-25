@@ -1,5 +1,4 @@
 #include <torch/data/ctf/reader.h>
-#include <torch/data/ctf/reader_constants.h>
 
 #include <algorithm>
 #include <cassert>
