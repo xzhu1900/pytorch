@@ -27,7 +27,6 @@ _O = 0o020000  # has 0th cepstral coefficient
 _V = 0o040000  # has VQ data
 _T = 0o100000  # has third differential coefficients
 
-
 class HTKFeat_read(object):
     """
     Read HTK format feature files
@@ -133,37 +132,39 @@ class HTKDataset():
     Make the index of the MLF and read a feature file on the fly.
     """
 
-    def __init__(self, mlflist_file, scp_file, statelist_file, add_start_end=False):
+    def __init__(self, mlflist_file, scp_file, statelist_file, mlf_format, input_big_endian, add_start_end=False):
 
         self._SOS = "<SOS>"
         self._EOS = "<EOS>"
         self.add_start_end = add_start_end
 
         self.phone2idx = None
-        self.idx2phone = None
+        # XXX
+        # self.idx2phone = None
         self.token_list = None
 
-        # will populate self.phone2idx & self.idx2phone within
         self.build_phone2idx(statelist_file)
-        self.vocab_size = len(self.phone2idx)
+        # XXX self.vocab_size = len(self.phone2idx)
 
-        utt2labels = self.build_utt2labels(mlflist_file)
+        utt2labels = self.build_utt2labels(mlflist_file, mlf_format, input_big_endian)
 
         self.utt_list = list()
         self.build_utt_list(scp_file, utt2labels)
 
-        x, _, _ = self.__getitem__(0)
-        self.input_dim = x.shape[1]
-
     def build_utt_list(self, scp_file, utt2labels):
-        """
-        internaly update self.utt_list
-        """
+
         print("Starting to build utt_list")
 
-        total_duration = 0
-        total_duration_not_found = 0
         for line in open(scp_file, 'r'):
+            """
+            Parsing scp file.
+            The scp file lists the relationship between utterance id and the chunk file.
+            One example is as below:
+                39DDCBFDBE134C83A47A0DAF1EDD480F_0.mfc=chunk0.feature[0,52]
+            Here the 39DDCBFDBE134C83A47A0DAF1EDD480F_0 is the utterance id, and
+            it is corresponding to the chunk file chunk0.feature with start frame equal
+            to 0 and end frame equal to 52.
+            """
             line = line.rstrip()
             utt_id, chunk_path = line.split('=')
             #XXX bug here
@@ -173,8 +174,7 @@ class HTKDataset():
             end_frame = end_frame[:-1] # remove ']'
             start_frame = int(start_frame)
             end_frame = int(end_frame)
-            duration = end_frame - start_frame + 1
-            duration = duration * 30 / 1000 # each frame 30ms, converting to secs
+
             # only add this sample to this list if a labels exists for it
             try:
                 labels = utt2labels[utt_id]
@@ -187,18 +187,17 @@ class HTKDataset():
                     "chunk_path": chunk_path,
                     "start_frame": start_frame,
                     "end_frame": end_frame,
-                    "duration": duration,
                     "labels": labels
                 })
-                total_duration += duration
-            except KeyError as e:
-                total_duration_not_found += duration
+
+            except:
+                print("Error while building utt list")
                 pass
 
         print("utt_list built.")
 
 
-    def build_utt2labels(self, mlflist_file):
+    def build_utt2labels(self, mlflist_file, mlf_format, input_big_endian):
         """
         Will read the MLF list file and accordingly return utt2labels
         """
@@ -210,7 +209,7 @@ class HTKDataset():
             for mlf_chunk_file in fid:
                 mlf_chunk_file = mlf_chunk_file.rstrip()
                 # will internally update utt2labels
-                self.read_mlf_chunk_file(mlf_chunk_file, utt2labels)
+                self.read_mlf_chunk_file(mlf_chunk_file, mlf_format, input_big_endian, utt2labels)
 
         print("utt2labels built")
 
@@ -237,8 +236,6 @@ class HTKDataset():
             self.phone2idx[self._EOS] = len(self.phone2idx)
             self.phone2idx[self._SOS] = len(self.phone2idx)
 
-        self.idx2phone = {v: k for k, v in self.phone2idx.items()}
-
         print("label list built")
 
 
@@ -246,7 +243,7 @@ class HTKDataset():
         return len(self.utt_list)
 
     def __getitemframe__(self, idx):
-        # read the chunk file
+        # read the frame count of an utterance
         start_frame = self.utt_list[idx]["start_frame"]
         end_frame = self.utt_list[idx]["end_frame"]
         return end_frame - start_frame + 1
@@ -260,11 +257,10 @@ class HTKDataset():
         y = self.utt_list[idx]["labels"]
         return x, y, self.utt_list[idx]["utt_id"]
 
-    def __getitemchunkated__(self, idx, seq_len):
+    def __getchunkateditem__(self, idx, seq_len):
         # read the chunk file
         chunk_path = self.utt_list[idx]["chunk_path"]
         start_frame = self.utt_list[idx]["start_frame"]
-        end_frame = self.utt_list[idx]["end_frame"]
         x = self.read_chunk_path(chunk_path, start_frame, start_frame + seq_len - 1)
         y = self.utt_list[idx]["labels"]
         return x, y, self.utt_list[idx]["utt_id"]
@@ -295,33 +291,80 @@ class HTKDataset():
 
         return obs
 
-    def read_mlf_chunk_file(self, mlf_chunk_file, labels):
+    def read_mlf_chunk_file(self, mlf_chunk_file, mlf_format, input_big_endian, labels):
 
-        # TODO: this only works with text format mlf file. We need to add suport for binary format as well.
-        utt_id = None
+        if (mlf_format == "text"):
+            # read text mlf file. One example of the mlf file is as blow:
+            #    "An4/71/71/cen5-fjam-b.lab"
+            #    0 100000 sil[2] -0.785971 sil 454.794006 </s>
+            #    100000 5500000 sil[3] 465.522034
+            #    5500000 6400000 sil[2] -28.617254
+            #    6400000 6800000 sil[4] 18.675182
+            #    .
+            # the first line begins with the uttrance id, followed by a list of lines
+            # of label data, and finally ends with a dot.
 
-        for line in open(mlf_chunk_file):
-            line = line.rstrip()
+            utt_id = None
 
-            if len(line) < 1 or line[0] == '#':
-                continue # empty line or a comment
+            for line in open(mlf_chunk_file):
+                line = line.rstrip()
 
-            elif line[0] == '"': # a new utterance has started
-                utt_id = line.split(".")[0]
-                utt_id = utt_id[1:]
-                labels[utt_id] = list()
+                if len(line) < 1 or line[0] == '#':
+                    continue # empty line or a comment
 
-            elif line[0] == '.': # the utterance has ended
-                continue
+                elif line[0] == '"': # a new utterance has started
+                    utt_id = line.split(".")[0]
+                    utt_id = utt_id[1:]
+                    labels[utt_id] = list()
 
-            else:
-                assert line[0].isdigit() , "Error parsing MLF chunk. Unexpected structure."
-                tokens = line.split()
-                start = tokens[0]
-                start = int(int(start) / 100000)
-                end = tokens[1]
-                end = int(int(end) / 100000)
-                dup = end - start
-                u = tokens[2]
-                token = self.phone2idx[u], dup
-                labels[utt_id].append(token)
+                elif line[0] == '.': # the utterance has ended
+                    continue
+
+                else:
+                    assert line[0].isdigit() , "Error parsing MLF chunk. Unexpected structure."
+                    tokens = line.split()
+                    start = tokens[0]
+                    start = int(int(start) / 100000)
+                    end = tokens[1]
+                    end = int(int(end) / 100000)
+                    dup_count = end - start
+                    u = tokens[2]
+                    token = self.phone2idx[u], dup_count
+
+                    # each label entry contains the label index and the label duplicated count
+                    labels[utt_id].append(token)
+        else:
+            assert mlf_format == "binary"
+
+            # read binary mlf file. The layout of binary mlf file is as below:
+            # 'MLF' string header, a 2 bytes version number, then an array of the utterance label
+            # data block. Each label data block contains a short integer of the length in byte of
+            # the utterance id, then the id string, followed by the sequence end frame id, the
+            #  sequence size and finally the (label, duplicate_count) pair.
+            endian = "big"
+            if(input_big_endian!= True) :
+                 endian = "little"
+
+            utt_id = None
+
+            with open(mlf_chunk_file, "rb") as f:
+                head = f.read(3)
+                version = f.read(2)
+
+                while True:
+                    id_len = int.from_bytes(f.read(2), byteorder=endian)
+                    if not id_len:
+                        break
+                    utt_id = f.read(id_len).decode('ascii')
+                    labels[utt_id] = list()
+
+                    sequence_end = int.from_bytes(f.read(4), byteorder=endian)
+                    sequence_size = int.from_bytes(f.read(2), byteorder=endian)
+
+                    for i in range(sequence_size):
+                        u = int.from_bytes(f.read(2), byteorder=endian)
+                        dup = int.from_bytes(f.read(2), byteorder=endian)
+                        token = u, dup
+
+                        # each label entry contains the label index and the label duplicated count
+                        labels[utt_id].append(token)
