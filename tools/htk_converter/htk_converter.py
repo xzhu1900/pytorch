@@ -1,6 +1,7 @@
 from htk_dataset import HTKDataset
 import numpy
 import math
+import os
 
 # TODO: casing: camel or _ delimeter
 
@@ -15,6 +16,10 @@ class HTKConverter():
 
         if(output_dir[-1] != '/'):
             output_dir += '/'
+
+        if not os.path.exists(output_dir):
+            print("The output folder{} doesn't exits. Creating one".format(output_dir))
+            os.makedirs(output_dir)
 
         feature_size = len(self.dataset.utt_list)
         utterance_per_chunk = chunk_size

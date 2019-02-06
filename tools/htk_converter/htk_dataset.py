@@ -209,6 +209,7 @@ class HTKDataset():
             for mlf_chunk_file in fid:
                 mlf_chunk_file = mlf_chunk_file.rstrip()
                 # will internally update utt2labels
+                print("Starting parsing mlf file: {}".format(mlf_chunk_file))
                 self.read_mlf_chunk_file(mlf_chunk_file, mlf_format, input_big_endian, utt2labels)
 
         print("utt2labels built")
@@ -305,6 +306,7 @@ class HTKDataset():
             # of label data, and finally ends with a dot.
 
             utt_id = None
+            utt_count = 0
 
             for line in open(mlf_chunk_file):
                 line = line.rstrip()
@@ -316,6 +318,9 @@ class HTKDataset():
                     utt_id = line.split(".")[0]
                     utt_id = utt_id[1:]
                     labels[utt_id] = list()
+                    utt_count = utt_count+1
+                    if utt_count % 500 == 0:
+                        print("****{} utterances parsed".format(utt_count))
 
                 elif line[0] == '.': # the utterance has ended
                     continue
