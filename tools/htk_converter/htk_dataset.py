@@ -191,8 +191,8 @@ class HTKDataset():
                 })
 
             except:
-                print("Error while building utt list")
-                pass
+                print("utterance with id equal to {} cannot be found in utt2labels list".format(utt_id))
+                raise
 
         print("utt_list built.")
 
@@ -317,8 +317,12 @@ class HTKDataset():
                 elif line[0] == '"': # a new utterance has started
                     utt_id = line.split(".")[0]
                     utt_id = utt_id[1:]
+                    if utt_id[-1] == '"':
+                        utt_id = utt_id[:-1]
                     labels[utt_id] = list()
                     utt_count = utt_count+1
+                    if utt_count == 1:
+                        print("example utterance id: {}".format(utt_id))
                     if utt_count % 500 == 0:
                         print("****{} utterances parsed".format(utt_count))
 
