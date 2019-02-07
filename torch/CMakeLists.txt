@@ -218,6 +218,7 @@ endif()
 if (NOT NO_API)
   list(APPEND TORCH_SRCS
     ${TORCH_SRC_DIR}/csrc/api/src/cuda.cpp
+    ${TORCH_SRC_DIR}/csrc/api/include/torch/htk/htk_reader.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/datasets/mnist.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/samplers/random.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/data/samplers/sequential.cpp
@@ -326,6 +327,8 @@ endif()
 if (NOT NO_API)
   target_include_directories(torch PUBLIC
     ${TORCH_SRC_DIR}/csrc/api
+    /usr/local/boost-1.60.0/include/boost/
+    /usr/local/boost-1.60.0/include/
     ${TORCH_SRC_DIR}/csrc/api/include)
 endif()
 
