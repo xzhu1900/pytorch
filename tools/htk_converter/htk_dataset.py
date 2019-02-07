@@ -192,7 +192,7 @@ class HTKDataset():
 
             except:
                 print("utterance with id equal to {} cannot be found in utt2labels list".format(utt_id))
-                raise
+                pass
 
         print("utt_list built.")
 
