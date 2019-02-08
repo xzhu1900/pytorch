@@ -8,10 +8,10 @@ namespace htk {
 
 using namespace std;
 using namespace torch::data;
-// Using _DEBUG to validate more parsing infomation for debugging purpose. Please
-// commentted out this for perf measurement.
-// TODO: find a good way to set this switch
-#define _DEBUG 1
+// Using _DEBUG to validate more parsing infomation for debugging purpose.
+// Please commentted out this for perf measurement.
+// TODO: integrate this switch to cmake file.
+#define _DEBUG 0
 
 union {
   uint16_t s;
@@ -175,7 +175,9 @@ class HTKChunkDataReader
   using LabelType = uint16_t;
   using LatticeType = uint8_t;
 
-  explicit HTKChunkDataReader(const string& file_directory, const string& file_set_name);
+  explicit HTKChunkDataReader(
+      const string& file_directory,
+      const string& file_set_name);
   HTKChunkDataReader() = delete;
 
   size_t chunk_count() {
@@ -186,7 +188,7 @@ class HTKChunkDataReader
 
   BatchType read_chunk(size_t chunk_id) override;
 
-  void reset() override {};
+  void reset() override{};
 
  private:
   void parse_file_set(const string& file_set_name);
@@ -196,7 +198,7 @@ class HTKChunkDataReader
       const std::string& file_name,
       const std::string& target_name,
       const size_t chunk_size,
-      std::vector<Utterance>& data) {
+      std::vector<Utterance>& data) try {
     ifstream chunk_file_stream;
     chunk_file_stream.open(
         file_name.data(), ios::in | ios::binary | std::ios::ate);
@@ -204,12 +206,9 @@ class HTKChunkDataReader
     std::streamsize size = chunk_file_stream.tellg();
     chunk_file_stream.seekg(0, std::ios::beg);
 
-    // TODO: Currently we read the whole chunk file into memory. This works for
-    // most of the cases. But it is still possible that, the user provides
-    // extremely large file. A vector<float> can hold 1073741823 elements at
-    // most, which is around 4G size data. Given that most of the feature file
-    // size is under 100M, I'd consider this is a rare case that we can re-visit
-    // later.
+    // Read the whole chunk file into memory. If the file is too large, an
+    // exception will throw on bad_alloc. The pointer to this exception will be
+    // propagated to the ChunkDatasets main thread to be caught.
     std::vector<char> buffer(size);
     if (chunk_file_stream.read(buffer.data(), size)) {
       // Read header string
@@ -297,6 +296,13 @@ class HTKChunkDataReader
       assert(start_pos == end_pos);
       chunk_file_stream.close();
     }
+  } catch (const std::bad_alloc& e) {
+    std::string error_msg =
+        "Allocation failed when trying to load chunk file. "
+        "Probably due to chunk file size too large. " + std::string(e.what());
+    throw std::runtime_error(error_msg);
+  } catch (...) {
+    throw;
   }
 
   struct ChunkInfo {
