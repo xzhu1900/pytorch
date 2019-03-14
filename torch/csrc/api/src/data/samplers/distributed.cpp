@@ -64,14 +64,16 @@ void DistributedRandomSampler::reset(optional<size_t> new_size) {
 
 void DistributedRandomSampler::populate_indices() {
   std::thread::id this_id = std::this_thread::get_id();
-  std::cout << "thread: " << this_id << "populate_indices \n";
-  std::cout << "thread: " << this_id << "num_local_samples "<<num_local_samples<<" \n";
-  std::cout << "thread: " << this_id << "sample_count "<<sample_count<<" \n";
+  std::cout << "thread: " << this_id << "populate_indices \n";  
   std::cout << "thread: " << this_id << "rank_ "<<rank_<<" \n";
   
   size_t num_local_samples = local_sample_count();
+  std::cout << "thread: " << this_id << "num_local_samples "<<num_local_samples<<" \n";
+  
   size_t sample_count =
       num_replicas_ == 1 ? size_ : num_local_samples * num_replicas_;
+  std::cout << "thread: " << this_id << "sample_count "<<sample_count<<" \n";
+  
   all_indices_.resize(sample_count);
   std::iota(std::begin(all_indices_), std::end(all_indices_), 0);
   for (size_t i = size_; i < sample_count; ++i) {
