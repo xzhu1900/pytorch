@@ -6,6 +6,13 @@
 #include <cstddef>
 #include <random>
 #include <vector>
+#include <iostream>
+
+#include <thread>
+#include <chrono>
+#include <mutex>
+
+//std::mutex g_display_mutex;
 
 namespace torch {
 namespace data {
@@ -21,6 +28,11 @@ DistributedRandomSampler::DistributedRandomSampler(
       end_index_(0),
       sample_index_(0) {
   // shuffle first time.
+  std::thread::id this_id = std::this_thread::get_id();
+ 
+  //g_display_mutex.lock();
+  std::cout << "thread: " << this_id << "reset dis-sampler with size "<<size_<<"\n";
+  //g_display_mutex.unlock();
   reset(size_);
 }
 
@@ -51,6 +63,12 @@ void DistributedRandomSampler::reset(optional<size_t> new_size) {
 }
 
 void DistributedRandomSampler::populate_indices() {
+  std::thread::id this_id = std::this_thread::get_id();
+  std::cout << "thread: " << this_id << "populate_indices \n";
+  std::cout << "thread: " << this_id << "num_local_samples "<<num_local_samples<<" \n";
+  std::cout << "thread: " << this_id << "sample_count "<<sample_count<<" \n";
+  std::cout << "thread: " << this_id << "rank_ "<<rank_<<" \n";
+  
   size_t num_local_samples = local_sample_count();
   size_t sample_count =
       num_replicas_ == 1 ? size_ : num_local_samples * num_replicas_;
