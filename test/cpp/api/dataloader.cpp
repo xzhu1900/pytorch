@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <torch/data.h>
+#include <torch/htk/htk_reader.h>
 #include <torch/data/detail/sequencers.h>
 #include <torch/serialize.h>
 #include <torch/types.h>
@@ -1618,5 +1619,44 @@ TEST(DataLoaderTest, ChunkDataSetGetBatchWithUnevenBatchSize) {
         ASSERT_TRUE(batch.size() == 20);
       }
     }
+  }
+}
+
+TEST(DataLoaderTest, test000) {
+
+  const size_t prefetch_count = 1;
+  const size_t batch_size = 10;
+  htk::HTKChunkDataReader data_reader("/home/xuzhu/data/small_data/generated/", "/home/xuzhu/data/small_data/generated/fileSet.json");
+  samplers::SequentialSampler sampler(0);
+
+  auto dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
+          htk::HTKChunkDataReader,
+          samplers::SequentialSampler,
+          samplers::SequentialSampler>>(
+          data_reader,
+          sampler,
+          sampler,
+          datasets::ChunkDatasetOptions(prefetch_count, batch_size));
+
+  // datasets::SharedBatchDataset<datasets::ChunkDataset<
+  //     HTKChunkDataReader,
+  //     samplers::SequentialSampler,
+  //     samplers::SequentialSampler>>
+  //     dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
+  //         HTKChunkDataReader,
+  //         samplers::SequentialSampler,
+  //         samplers::SequentialSampler>>(
+  //         data_reader,
+  //         sampler,
+  //         sampler,
+  //         datasets::ChunkDatasetOptions(prefetch_count, batch_size));
+
+  auto data_loader = torch::data::make_data_loader(
+      dataset, DataLoaderOptions(batch_size).workers(0));
+
+  for (auto iterator = data_loader->begin(); iterator != data_loader->end();
+       ++iterator) {
+    //ASSERT_EQ(iterator->size(), 0);
+    std::cout<<iterator->size()<<std::endl;
   }
 }
