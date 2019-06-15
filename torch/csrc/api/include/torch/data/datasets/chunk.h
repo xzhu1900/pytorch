@@ -243,27 +243,16 @@ class BatchDataBuffer {
 
 /// Options to configure a `ChunkDataset`.
 struct ChunkDatasetOptions {
-  enum class CheckpointOption {
-    None = 0,
-    Save = 1,
-    Load_Then_Save = 2,
-    Load_Then_None = 3,
-  };
-
   ChunkDatasetOptions() = delete;
   ChunkDatasetOptions(
       size_t preloader_count,
       size_t batch_size,
       size_t cache_size = 2048,
-      CheckpointOption checkpoint_option = CheckpointOption::None,
-      std::string checkpoint_file_name = "",
-      size_t save_inteval = 0)
+      std::string resume_from_file = "")
       : preloader_count_(preloader_count),
         batch_size_(batch_size),
         cache_size_(cache_size),
-        checkpoint_option_(checkpoint_option),
-        save_inteval_(save_inteval),
-        checkpoint_file_name_(std::move(checkpoint_file_name)) {
+        resume_from_file_(std::move(resume_from_file)) {
     TORCH_CHECK(
         preloader_count_ > 0,
         "Preloader count is 0. At least one preloader needs to be specified.");
@@ -277,14 +266,6 @@ struct ChunkDatasetOptions {
         cache_size_ >= batch_size_,
         "Cache size is less than batch size. Cache needs to be large enough to "
         "hold at least one batch.");
-    TORCH_CHECK(
-        checkpoint_option_ == CheckpointOption::None || !checkpoint_file_name_.empty(),
-        "checkpoint_file_name cannot be empty for checkpoint save or load mode.");
-    TORCH_CHECK(
-        (checkpoint_option_ != CheckpointOption::Save &&
-         checkpoint_option_ != CheckpointOption::Load_Then_Save) ||
-            save_inteval_ != 0,
-        "save_inteval cannot be 0 for checkpoint save or load_then_save mode.");
   }
 
   /// The number of worker thread to preload chunk data.
@@ -296,11 +277,7 @@ struct ChunkDatasetOptions {
   // the capacity of the queue for batch caching.
   TORCH_ARG(size_t, cache_size) = 2048;
 
-  TORCH_ARG(CheckpointOption, checkpoint_option) = CheckpointOption::None;
-
-  TORCH_ARG(size_t, save_inteval) = 0;
-
-  TORCH_ARG(std::string, checkpoint_file_name);
+  TORCH_ARG(std::string, resume_from_file) = "";
 };
 
 /// A stateful dataset that support hierarchical sampling and prefetching of
@@ -338,12 +315,7 @@ class ChunkDataset final
         options_(std::move(options)),
         quit_worker_(false),
         running_preloaders_(0),
-        batch_inteval_count_(0),
-        load_checkpoint_(
-            options_.checkpoint_option_ ==
-                ChunkDatasetOptions::CheckpointOption::Load_Then_Save ||
-            options_.checkpoint_option_ ==
-                ChunkDatasetOptions::CheckpointOption::Load_Then_None) {}
+        load_checkpoint_(!options_.resume_from_file_.empty()) {}
 
   virtual ~ChunkDataset() {
     // stop batch buffer first.
@@ -368,16 +340,12 @@ class ChunkDataset final
       " The requested batch size is ", batch_size,
       ", while the dataset is created with batch size equal to ", options_.batch_size_);
     
-    batch_inteval_count_ ++;
-    if (batch_inteval_count_ == save_inteval_) {
-      {
-        std::lock_guard<std::mutex> lock(chunk_index_guard_);
-        torch::save(this->chunk_sampler(), options_.checkpoint_file_name_);
-      }
-      batch_inteval_count_ = 0;
-    }
-
     return batch_buffer_->get_batch();
+  }
+
+  void save(const std::string& save_file_name){
+    std::lock_guard<std::mutex> lock(chunk_index_guard_);
+    torch::save(this->chunk_sampler(), save_file_name);
   }
 
   /// This will clear any internal state and starts the internal prefetching
@@ -396,18 +364,12 @@ class ChunkDataset final
       chunk_sampler_.reset(chunk_reader_.chunk_count());
     }
     else {
-      torch::load(chunk_sampler_, options_.checkpoint_file_name_);
+      torch::load(chunk_sampler_, options_.resume_from_file_);
       
       // After the checkpoint is loaded, mark the boolean to false to prevent future loading.
       load_checkpoint_ = false;
     }
 
-    save_inteval_ = (options_.checkpoint_option_ ==
-                         ChunkDatasetOptions::CheckpointOption::Save ||
-                     options_.checkpoint_option_ ==
-                         ChunkDatasetOptions::CheckpointOption::Load_Then_Save)
-        ? options_.save_inteval_
-        : 0;
 
     // Throw out any existing cached batch in the buffer and re-creates a new
     // chunk buffer.
@@ -509,12 +471,6 @@ class ChunkDataset final
 
   // mutex to synchronize chunk sampler next() call.
   std::mutex chunk_index_guard_;
-
-  // minibatch save inteval.
-  size_t save_inteval_;
-  
-  // counter for checkpoint save activity.
-  size_t batch_inteval_count_;
 
   // boolean value to indicate whether we need to load the checkpoint for chunk_sampler_.
   bool load_checkpoint_;

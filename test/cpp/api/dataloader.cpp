@@ -98,16 +98,11 @@ TEST(DataTest, ChunkDataSetWithInvalidInitParameter) {
   DummyChunkDataReader data_reader;
   samplers::SequentialSampler sampler(0);
 
-  using datasets::ChunkDatasetOptions;
-
   auto initialization_function =
       [&](size_t preloader_count,
           size_t batch_size,
           size_t cache_size,
-          ChunkDatasetOptions::CheckpointOption checkpoint_option =
-              ChunkDatasetOptions::CheckpointOption::None,
-          std::string checkpoint_file_name = "",
-          size_t save_inteval = 0) {
+          std::string checkpoint_file_name = "") {
         datasets::SharedBatchDataset<datasets::ChunkDataset<
             DummyChunkDataReader,
             samplers::SequentialSampler,
@@ -123,9 +118,7 @@ TEST(DataTest, ChunkDataSetWithInvalidInitParameter) {
                     preloader_count,
                     batch_size,
                     cache_size,
-                    checkpoint_option,
-                    checkpoint_file_name,
-                    save_inteval));
+                    checkpoint_file_name));
       };
 
   ASSERT_THROWS_WITH(
@@ -144,26 +137,6 @@ TEST(DataTest, ChunkDataSetWithInvalidInitParameter) {
       initialization_function(1, 10, 5),
       "Cache size is less than batch size. Cache needs to be large enough to "
       "hold at least one batch.");
-
-  ASSERT_THROWS_WITH(
-      initialization_function(
-          1, 10, 20, ChunkDatasetOptions::CheckpointOption::Save),
-      "checkpoint_file_name cannot be empty for checkpoint save or load mode.");
-
-  ASSERT_THROWS_WITH(
-      initialization_function(
-          1,
-          10,
-          20,
-          ChunkDatasetOptions::CheckpointOption::Save,
-          "test_checkpoint",
-          0),
-      "save_inteval cannot be 0 for checkpoint save or load_then_save mode.");
-
-  ASSERT_THROWS_WITH(
-      initialization_function(
-          1, 10, 20, ChunkDatasetOptions::CheckpointOption::Load_Then_Save),
-      "checkpoint_file_name cannot be empty for checkpoint save or load mode.");
 }
 
 struct InfiniteStreamDataset
@@ -1916,7 +1889,7 @@ TEST(DataLoaderTest, ChunkDatasetDoesNotHang) {
   auto iterator = data_loader->begin();
 }
 
-TEST(DataLoaderTest, ChunkDatasetSaveOption) {
+TEST(DataLoaderTest, ChunkDatasetSave) {
   const size_t chunk_count_ = 6;
   const size_t chunk_size = 10;
 
@@ -1966,10 +1939,7 @@ TEST(DataLoaderTest, ChunkDatasetSaveOption) {
             ChunkDatasetOptions(
                 prefetch_count,
                 batch_size,
-                chunk_size /*cache size*/,
-                ChunkDatasetOptions::CheckpointOption::Save,
-                tempfile.name,
-                save_inteval));
+                chunk_size /*cache size*/));
 
     auto data_loader = torch::data::make_data_loader(
         dataset,
@@ -1979,7 +1949,10 @@ TEST(DataLoaderTest, ChunkDatasetSaveOption) {
       int iteration_count = 0;
       for (auto iterator = data_loader->begin(); iterator != data_loader->end();
            ++iterator, ++iteration_count) {
+             
         if ((iteration_count + 1) % save_inteval == 0) {
+          dataset->save(tempfile.name);
+
           samplers::SequentialSampler new_sampler(0);
           torch::load(new_sampler, tempfile.name);
 
@@ -2026,7 +1999,7 @@ TEST(DataLoaderTest, ChunkDatasetSaveOption) {
   }
 }
 
-TEST(DataLoaderTest, ChunkDatasetLoadOption) {
+TEST(DataLoaderTest, ChunkDatasetResume) {
   auto tempfile = c10::make_tempfile();
 
   const size_t prefetch_count = 1;
@@ -2050,69 +2023,54 @@ TEST(DataLoaderTest, ChunkDatasetLoadOption) {
   // affected by the checkpoint, but the second should start normally.
   const int epoch_count = 2;
 
-  using datasets::ChunkDatasetOptions;
-  ChunkDatasetOptions::CheckpointOption options[] = {
-      ChunkDatasetOptions::CheckpointOption::Load_Then_None,
-      ChunkDatasetOptions::CheckpointOption::Load_Then_Save};
+  datasets::SharedBatchDataset<datasets::ChunkDataset<
+      DummyChunkDataReader,
+      samplers::SequentialSampler,
+      samplers::SequentialSampler>>
+      dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
+          DummyChunkDataReader,
+          samplers::SequentialSampler,
+          samplers::SequentialSampler>>(
+          data_reader,
+          sampler,
+          sampler,
+          datasets::ChunkDatasetOptions(
+              prefetch_count,
+              batch_size,
+              20 /*cache size*/,
 
-  for (auto option : options) {
-    datasets::SharedBatchDataset<datasets::ChunkDataset<
-        DummyChunkDataReader,
-        samplers::SequentialSampler,
-        samplers::SequentialSampler>>
-        dataset = datasets::make_shared_dataset<datasets::ChunkDataset<
-            DummyChunkDataReader,
-            samplers::SequentialSampler,
-            samplers::SequentialSampler>>(
-            data_reader,
-            sampler,
-            sampler,
-            ChunkDatasetOptions(
-                prefetch_count,
-                batch_size,
-                20 /*cache size*/,
-                option,
-                tempfile.name,
-                save_inteval));
+              tempfile.name));
 
-    auto data_loader = torch::data::make_data_loader(
-        dataset,
-        DataLoaderOptions(batch_size).workers(dataloader_worker_count));
+  auto data_loader = torch::data::make_data_loader(
+      dataset, DataLoaderOptions(batch_size).workers(dataloader_worker_count));
 
-    for (int epoch_index = 0; epoch_index < epoch_count; ++epoch_index) {
-      int iteration_count = 0;
+  for (int epoch_index = 0; epoch_index < epoch_count; ++epoch_index) {
+    int iteration_count = 0;
 
-      // For the first epoch, the returned batch should be returned from the
-      // third chunk, because the check point skipped the first two chunks. But
-      // for the next epoch, it should start from the first batch.
-      int initial_value = epoch_index == 0 ? 15 : 0;
+    // For the first epoch, the returned batch should be returned from the
+    // third chunk, because the check point skipped the first two chunks. But
+    // for the next epoch, it should start from the first batch.
+    int initial_value = epoch_index == 0 ? 15 : 0;
 
-      for (auto iterator = data_loader->begin(); iterator != data_loader->end();
-           ++iterator, ++iteration_count) {
-        DummyChunkDataReader::BatchType batch = *iterator;
+    for (auto iterator = data_loader->begin(); iterator != data_loader->end();
+         ++iterator, ++iteration_count) {
+      DummyChunkDataReader::BatchType batch = *iterator;
 
-        std::vector<int> expected_result;
-        size_t expected_size =
-            (epoch_index > 0 && iteration_count == 3) ? 5 : 10;
-        expected_result.resize(expected_size);
-        std::iota(
-            expected_result.begin(), expected_result.end(), initial_value);
+      std::vector<int> expected_result;
+      size_t expected_size = (epoch_index > 0 && iteration_count == 3) ? 5 : 10;
+      expected_result.resize(expected_size);
+      std::iota(expected_result.begin(), expected_result.end(), initial_value);
 
-        ASSERT_EQ(batch.size(), expected_result.size());
-        ASSERT_TRUE(
-            std::equal(batch.begin(), batch.end(), expected_result.begin()));
+      ASSERT_EQ(batch.size(), expected_result.size());
+      ASSERT_TRUE(
+          std::equal(batch.begin(), batch.end(), expected_result.begin()));
 
-        initial_value += batch_size;
-      }
-    }
-
-    samplers::SequentialSampler new_sampler(0);
-    torch::load(new_sampler, tempfile.name);
-
-    if (option == ChunkDatasetOptions::CheckpointOption::Load_Then_None) {
-      ASSERT_EQ(new_sampler.index(), skipped_chunk);
-    } else {
-      ASSERT_EQ(new_sampler.index(), data_reader.chunk_count());
+      initial_value += batch_size;
     }
   }
+
+  samplers::SequentialSampler new_sampler(0);
+  torch::load(new_sampler, tempfile.name);
+
+  ASSERT_EQ(new_sampler.index(), skipped_chunk);
 }
