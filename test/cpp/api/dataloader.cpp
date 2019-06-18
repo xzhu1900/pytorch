@@ -1472,6 +1472,7 @@ TEST(DataLoaderTest, StatefulDatasetWithNoWorkers) {
     void reset() override {
       counter = 0;
     }
+    void save(const std::string& save_file_name) override{};
     int counter = 0;
   };
 
@@ -1508,6 +1509,8 @@ TEST(DataLoaderTest, StatefulDatasetWithManyWorkers) {
     void reset() override {
       counter = 0;
     }
+    void save(const std::string& save_file_name) override{};
+
     int counter = 0;
     std::mutex mutex;
   };
@@ -1545,6 +1548,7 @@ TEST(DataLoaderTest, StatefulDatasetWithMap) {
     void reset() override {
       counter = 0;
     }
+    void save(const std::string& save_file_name) override{};
     int counter = 0;
   };
 
@@ -1592,6 +1596,7 @@ TEST(DataLoaderTest, StatefulDatasetWithCollate) {
     void reset() override {
       counter = 0;
     }
+    void save(const std::string& save_file_name) override{};
     int counter = 0;
   };
 
@@ -1917,12 +1922,12 @@ TEST(DataLoaderTest, ChunkDatasetSave) {
 
   DummyTestChunkDataReader data_reader;
 
-  // tested save_intevals
-  const size_t save_intevals[] = {1, 2};
+  // tested save_intervals
+  const size_t save_intervals[] = {1, 2};
 
   using datasets::ChunkDatasetOptions;
 
-  for (auto save_inteval : save_intevals) {
+  for (auto save_interval : save_intervals) {
     auto tempfile = c10::make_tempfile();
 
     datasets::SharedBatchDataset<datasets::ChunkDataset<
@@ -1950,7 +1955,7 @@ TEST(DataLoaderTest, ChunkDatasetSave) {
       for (auto iterator = data_loader->begin(); iterator != data_loader->end();
            ++iterator, ++iteration_count) {
              
-        if ((iteration_count + 1) % save_inteval == 0) {
+        if ((iteration_count + 1) % save_interval == 0) {
           dataset->save(tempfile.name);
 
           samplers::SequentialSampler new_sampler(0);
@@ -2005,7 +2010,7 @@ TEST(DataLoaderTest, ChunkDatasetResume) {
   const size_t prefetch_count = 1;
   const size_t batch_size = 10;
   const size_t dataloader_worker_count = 0;
-  const size_t save_inteval = 2;
+  const size_t save_interval = 2;
 
   DummyChunkDataReader data_reader;
   samplers::SequentialSampler sampler(0);

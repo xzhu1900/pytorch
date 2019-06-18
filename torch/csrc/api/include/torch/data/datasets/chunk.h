@@ -274,9 +274,13 @@ struct ChunkDatasetOptions {
   /// The size of each batch.
   TORCH_ARG(size_t, batch_size);
 
-  // the capacity of the queue for batch caching.
+  /// The capacity of the queue for batch caching.
   TORCH_ARG(size_t, cache_size) = 2048;
 
+  /// The file name from where to load ChunkDatset's state. Default to empty
+  /// string meaning start ChunkDataset from fresh begining; when specified with
+  /// a file name, ChunkDataset::reset() will try to load the sampler state from
+  /// that file.
   TORCH_ARG(std::string, resume_from_file) = "";
 };
 
@@ -343,7 +347,7 @@ class ChunkDataset final
     return batch_buffer_->get_batch();
   }
 
-  void save(const std::string& save_file_name){
+  void save(const std::string& save_file_name) override {
     std::lock_guard<std::mutex> lock(chunk_index_guard_);
     torch::save(this->chunk_sampler(), save_file_name);
   }
