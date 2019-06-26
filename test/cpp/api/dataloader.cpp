@@ -1599,9 +1599,6 @@ TEST(DataLoaderTest, StatefulDatasetWithCollate) {
     void save(torch::serialize::OutputArchive& archive) const override{};
     void load(torch::serialize::InputArchive& archive) override {}
     int counter = 0;
-  };
-
-  auto d = D().map(transforms::Stack<Example<>>());
 
   const size_t kBatchSize = 5;
 

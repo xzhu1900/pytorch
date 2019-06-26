@@ -247,10 +247,12 @@ struct ChunkDatasetOptions {
   ChunkDatasetOptions(
       size_t preloader_count,
       size_t batch_size,
-      size_t cache_size = 2048)
+      size_t cache_size = 2048,
+      std::string resume_from_file = "")
       : preloader_count_(preloader_count),
         batch_size_(batch_size),
-        cache_size_(cache_size) {
+        cache_size_(cache_size),
+        resume_from_file_(std::move(resume_from_file)) {
     TORCH_CHECK(
         preloader_count_ > 0,
         "Preloader count is 0. At least one preloader needs to be specified.");
@@ -274,6 +276,12 @@ struct ChunkDatasetOptions {
 
   /// The capacity of the queue for batch caching.
   TORCH_ARG(size_t, cache_size) = 2048;
+
+  /// The file name from where to load ChunkDatset's state. Default to empty
+  /// string meaning start ChunkDataset from fresh begining; when specified with
+  /// a file name, ChunkDataset::reset() will try to load the sampler state from
+  /// that file.
+  TORCH_ARG(std::string, resume_from_file) = "";
 };
 
 /// A stateful dataset that support hierarchical sampling and prefetching of
